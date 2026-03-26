@@ -3,6 +3,7 @@ import { useAppStore, type AppPage } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { useGamification } from "@/hooks/useGamification";
 import { useOfficeStore } from "@/store/officeStore";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/lib/supabase";
 import { APP_NAME, AI_NAME } from "@/lib/constants";
 import {
@@ -10,6 +11,7 @@ import {
   LayoutGrid, LogOut, User, Bell, Zap, HeartHandshake,
   Settings2, Armchair, ChevronDown, Users, MessageCircle,
   Briefcase, Shield, UserCheck, ClipboardList, Package,
+  ShieldCheck,
 } from "lucide-react";
 import { getStatusColor, getLevelName, getXPForNextLevel, formatXP } from "@/lib/utils";
 import { KnockNotificationBanner } from "@/components/shared/KnockNotificationBanner";
@@ -29,7 +31,8 @@ interface NavGroup {
   items: Omit<NavItem, "badge">[];
 }
 
-const NAV_GROUPS: NavGroup[] = [
+// All possible nav items — filtered per-role at runtime
+const ALL_NAV_GROUPS: NavGroup[] = [
   {
     items: [
       { id: "office",  label: "Escritório", icon: <Building2 size={15} /> },
@@ -65,8 +68,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Configurações",
     items: [
-      { id: "office-settings", label: "Salas",      icon: <Settings2 size={15} /> },
-      { id: "desk-customize",  label: "Minha Mesa",  icon: <Armchair size={15} /> },
+      { id: "office-settings", label: "Salas",            icon: <Settings2 size={15} /> },
+      { id: "desk-customize",  label: "Minha Mesa",        icon: <Armchair size={15} /> },
+      { id: "user-approval",   label: "Aprovação",         icon: <ShieldCheck size={15} /> },
     ],
   },
 ];
@@ -80,6 +84,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuthStore();
   const { leaderboard } = useGamification();
   const presences = useOfficeStore((s) => s.presences);
+  const permissions = usePermissions();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [knockCount, setKnockCount] = useState(0);
 
@@ -89,6 +94,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   const onlineCount = presences.filter(
     (p) => p.user_id !== user?.id && p.status !== "offline"
   ).length;
+
+  // Filter nav groups based on role permissions
+  const allowedIds = new Set(permissions.navItems.map((n) => n.id));
+  const NAV_GROUPS: NavGroup[] = ALL_NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => allowedIds.has(item.id)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     if (!user) return;

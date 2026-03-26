@@ -2,6 +2,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAppStore } from "@/store/appStore";
 import { AppLayout } from "@/components/shared/AppLayout";
 import { LoginPage } from "@/pages/LoginPage";
+import { PendingApprovalPage } from "@/pages/PendingApprovalPage";
+import { SetupProfilePage } from "@/pages/SetupProfilePage";
 import { OfficePage } from "@/pages/OfficePage";
 import { FeedPage } from "@/pages/FeedPage";
 import { AIPage } from "@/pages/AIPage";
@@ -18,6 +20,7 @@ import { ProductCatalogPage } from "@/pages/ProductCatalogPage";
 import { SquadsPage } from "@/pages/SquadsPage";
 import { CollaboratorsPage } from "@/pages/CollaboratorsPage";
 import { CheckinsPage } from "@/pages/CheckinsPage";
+import { UserApprovalPage } from "@/pages/UserApprovalPage";
 
 function LoadingScreen() {
   return (
@@ -53,6 +56,7 @@ function PageRouter() {
     case "squads":           return <SquadsPage />;
     case "collaborators":    return <CollaboratorsPage />;
     case "checkins":         return <CheckinsPage />;
+    case "user-approval":    return <UserApprovalPage />;
     default:                 return <OfficePage />;
   }
 }
@@ -62,6 +66,16 @@ export default function App() {
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginPage />;
+
+  // Usuário aguardando aprovação
+  if (user.approval_status === "pending" || user.approval_status === "rejected") {
+    return <PendingApprovalPage />;
+  }
+
+  // Aprovado mas ainda não configurou função (primeiro acesso)
+  if (user.approval_status === "approved" && !user.funcao) {
+    return <SetupProfilePage />;
+  }
 
   return (
     <AppLayout>

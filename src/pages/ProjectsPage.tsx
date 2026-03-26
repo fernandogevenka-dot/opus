@@ -2076,35 +2076,27 @@ export function ProjectsPage() {
       {pageTab === "projects" && <>
 
       {/* ── Stats ── */}
-      <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <StatCard
-          icon={<TrendingUp size={16} />}
-          label="Total de Projetos"
-          value={String(filteredStats.totalProjetos)}
-          sub={`${filteredStats.active} ativos`}
-          color="bg-green-500/15 text-green-500"
-        />
-        <StatCard
-          icon={<DollarSign size={16} />}
-          label="Receita Total"
-          value={formatMRR(filteredStats.receitaTotal)}
-          sub="todas as fontes"
-          color="bg-blue-500/15 text-blue-500"
-        />
-        <StatCard
-          icon={<Repeat size={16} />}
-          label="MRR Ativo"
-          value={formatMRR(filteredStats.mrrAtivo)}
-          sub="só receita recorrente"
-          color="bg-purple-500/15 text-purple-500"
-        />
-        <StatCard
-          icon={<AlertTriangle size={16} />}
-          label="Churn Financeiro"
-          value={formatMRR(filteredStats.churnFinanceiro)}
-          sub={`${filtered.filter(p => !!p.churn_date).length} projetos`}
-          color="bg-red-500/15 text-red-500"
-        />
+      <div className="flex-shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Total de Projetos</span>
+          <span className="text-2xl font-bold tracking-tight">{filteredStats.totalProjetos}</span>
+          <span className="text-[11px] text-muted-foreground/60">{filteredStats.active} ativos</span>
+        </div>
+        <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Receita Total</span>
+          <span className="text-2xl font-bold tracking-tight">{formatMRR(filteredStats.receitaTotal)}</span>
+          <span className="text-[11px] text-muted-foreground/60">todas as fontes</span>
+        </div>
+        <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">MRR Ativo</span>
+          <span className="text-2xl font-bold tracking-tight">{formatMRR(filteredStats.mrrAtivo)}</span>
+          <span className="text-[11px] text-muted-foreground/60">só receita recorrente</span>
+        </div>
+        <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Churn Financeiro</span>
+          <span className="text-2xl font-bold tracking-tight">{formatMRR(filteredStats.churnFinanceiro)}</span>
+          <span className="text-[11px] text-muted-foreground/60">{filtered.filter(p => !!p.churn_date).length} projetos</span>
+        </div>
       </div>
 
       {/* ── Setor quick filters ── */}

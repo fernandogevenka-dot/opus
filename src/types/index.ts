@@ -13,6 +13,16 @@ export interface Title {
   xp_required: number;
 }
 
+export type OpusRole =
+  | "admin"
+  | "gerencia_peg"
+  | "coord_admin"
+  | "coord_peg"
+  | "colaborador"
+  | "pending";
+
+export type ApprovalStatus = "pending" | "approved" | "rejected";
+
 export interface User {
   id: string;
   google_id: string;
@@ -21,6 +31,10 @@ export interface User {
   avatar_url: string;
   team: string;
   role: string;
+  opus_role: OpusRole;
+  approval_status: ApprovalStatus;
+  funcao: string | null;
+  squad_id: string | null;
   title_active_id: string | null;
   title_active?: Title;
   xp: number;

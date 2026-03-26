@@ -58,57 +58,90 @@ export function useAuth() {
   async function upsertAndFetchUser(session: NonNullable<Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]>) {
     const googleUser = session.user;
     const meta = googleUser.user_metadata ?? {};
+    const email = googleUser.email ?? "";
+
+    // ── Restrição de domínio ──────────────────────────────────────────────
+    const ALLOWED_DOMAIN = "v4company.com";
+    if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+      console.warn("[OPUS] Domínio não autorizado:", email);
+      await supabase.auth.signOut();
+      setUser(null);
+      return;
+    }
 
     // Get google_id from identity data
     const googleIdentity = googleUser.identities?.find(i => i.provider === "google");
     const googleId = googleIdentity?.id ?? googleUser.id;
 
     try {
-      const { data: user, error } = await supabase
+      // Verificar se usuário já existe (preserva opus_role/approval_status)
+      const { data: existing } = await supabase
         .from("users")
-        .upsert(
-          {
-            id: googleUser.id,
-            google_id: googleId,
-            name: meta.full_name ?? meta.name ?? googleUser.email ?? "Usuário",
-            email: googleUser.email ?? "",
-            avatar_url: meta.avatar_url ?? meta.picture ?? "",
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        )
         .select("*, title_active:titles(*)")
+        .eq("id", googleUser.id)
         .single();
 
-      if (error) {
-        console.error("Erro ao upsert user:", error);
-        return;
+      let user;
+      if (existing) {
+        // Já existe — atualiza só campos do Google
+        const { data: updated, error } = await supabase
+          .from("users")
+          .update({
+            name: meta.full_name ?? meta.name ?? email,
+            avatar_url: meta.avatar_url ?? meta.picture ?? existing.avatar_url ?? "",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", googleUser.id)
+          .select("*, title_active:titles(*)")
+          .single();
+        if (error) { console.error("Erro ao update user:", error); return; }
+        user = updated;
+      } else {
+        // Novo usuário — cria como pending aguardando aprovação
+        const { data: created, error } = await supabase
+          .from("users")
+          .insert({
+            id: googleUser.id,
+            google_id: googleId,
+            name: meta.full_name ?? meta.name ?? email,
+            email,
+            avatar_url: meta.avatar_url ?? meta.picture ?? "",
+            opus_role: "pending",
+            approval_status: "pending",
+          })
+          .select("*, title_active:titles(*)")
+          .single();
+        if (error) { console.error("Erro ao insert user:", error); return; }
+        user = created;
       }
 
       if (user) {
         setUser(user as User);
 
-        // Upsert presence as online — spawn at corridor center (matches OfficeCanvas SPAWN)
-        try {
-          await supabase.from("user_presence").upsert(
-            {
-              user_id: user.id,
-              status: "available",
-              x: 680,
-              y: 480,
-              last_seen: new Date().toISOString(),
-            },
-            { onConflict: "user_id" }
-          );
-        } catch (presenceErr) {
-          console.warn("[OPUS] presence upsert failed (non-fatal):", presenceErr);
-        }
+        // Só configura presença e XP para usuários aprovados
+        if (user.approval_status === "approved") {
+          // Upsert presence as online — spawn at corridor center (matches OfficeCanvas SPAWN)
+          try {
+            await supabase.from("user_presence").upsert(
+              {
+                user_id: user.id,
+                status: "available",
+                x: 680,
+                y: 480,
+                last_seen: new Date().toISOString(),
+              },
+              { onConflict: "user_id" }
+            );
+          } catch (presenceErr) {
+            console.warn("[OPUS] presence upsert failed (non-fatal):", presenceErr);
+          }
 
-        // Give daily presence XP — non-fatal
-        try {
-          await grantDailyXP(user.id);
-        } catch (xpErr) {
-          console.warn("[OPUS] daily XP grant failed (non-fatal):", xpErr);
+          // Give daily presence XP — non-fatal
+          try {
+            await grantDailyXP(user.id);
+          } catch (xpErr) {
+            console.warn("[OPUS] daily XP grant failed (non-fatal):", xpErr);
+          }
         }
       }
     } catch (err) {
