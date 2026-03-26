@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@plugin "tailwindcss-animate";
+
+/* ─── Brand palette ─────────────────────────────────────────────────────────── */
+@theme {
+  --color-brand-50: #fff0f0;
+  --color-brand-100: #ffe1e1;
+  --color-brand-200: #ffc7c7;
+  --color-brand-300: #ff9f9f;
+  --color-brand-400: #ff6b6b;
+  --color-brand-500: #e11d2a;
+  --color-brand-600: #c9161e;
+  --color-brand-700: #a81119;
+  --color-brand-800: #8a1015;
+  --color-brand-900: #721112;
+  --color-brand-950: #400407;
+
+  /* ── Light theme colors (Tailwind utility classes) ── */
+  --color-background:          hsl(240 5% 96%);    /* #f4f4f5 */
+  --color-foreground:          hsl(240 10% 10%);   /* #191919 */
+  --color-card:                hsl(0 0% 100%);     /* #ffffff */
+  --color-card-foreground:     hsl(240 10% 10%);
+  --color-popover:             hsl(0 0% 100%);
+  --color-popover-foreground:  hsl(240 10% 10%);
+  --color-primary:             hsl(356 76% 45%);   /* brand red */
+  --color-primary-foreground:  hsl(0 0% 100%);
+  --color-secondary:           hsl(240 5% 92%);    /* #eaeaec */
+  --color-secondary-foreground: hsl(240 10% 25%);
+  --color-muted:               hsl(240 5% 92%);
+  --color-muted-foreground:    hsl(240 5% 48%);    /* #737378 */
+  --color-accent:              hsl(356 76% 45%);
+  --color-accent-foreground:   hsl(0 0% 100%);
+  --color-destructive:         hsl(0 72% 50%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border:              hsl(240 6% 87%);    /* #dddde0 */
+  --color-input:               hsl(0 0% 100%);
+  --color-ring:                hsl(356 76% 45%);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --radius: 0.5rem;
+}
+
+/* ─── CSS vars for hsl(var(--x)) usage in components ────────────────────────── */
+:root {
+  --background:          240 5% 96%;
+  --foreground:          240 10% 10%;
+  --card:                0 0% 100%;
+  --card-foreground:     240 10% 10%;
+  --popover:             0 0% 100%;
+  --popover-foreground:  240 10% 10%;
+  --primary:             356 76% 45%;
+  --primary-foreground:  0 0% 100%;
+  --secondary:           240 5% 92%;
+  --secondary-foreground: 240 10% 25%;
+  --muted:               240 5% 92%;
+  --muted-foreground:    240 5% 48%;
+  --accent:              356 76% 45%;
+  --accent-foreground:   0 0% 100%;
+  --destructive:         0 72% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border:              240 6% 87%;
+  --input:               0 0% 100%;
+  --ring:                356 76% 45%;
+  --radius:              0.5rem;
+}
+
+/* ─── Global resets ─────────────────────────────────────────────────────────── */
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: hsl(var(--background)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/* ─── Card / glass utilities ─────────────────────────────────────────────────── */
+/* No glassmorphism — clean solid cards with subtle shadow */
+.glass {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+}
+
+.glass-strong {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
+}
+
+/* ─── Status indicators ──────────────────────────────────────────────────────── */
+.status-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 2px hsl(var(--card));
+}
+
+.status-available  { background-color: #22c55e; }
+.status-busy       { background-color: #eab308; }
+.status-in_meeting { background-color: #ef4444; }
+.status-away       { background-color: #6b7280; }
+.status-offline    { background-color: #d1d5db; }
+
+/* ─── Badges ─────────────────────────────────────────────────────────────────── */
+.xp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: hsl(var(--primary) / 0.08);
+  border: 1px solid hsl(var(--primary) / 0.2);
+  color: hsl(var(--primary));
+}
+
+.title-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: rgb(180, 115, 10);
+}
+
+/* ─── Misc ───────────────────────────────────────────────────────────────────── */
+#office-canvas canvas { display: block; }
+
+.no-select {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
