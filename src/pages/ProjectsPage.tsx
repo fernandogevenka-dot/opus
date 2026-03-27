@@ -808,6 +808,8 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prodSearch, setProdSearch] = useState("");
+  const [prodCat, setProdCat]       = useState<string>("all");
 
   function set<K extends keyof ProjectFormData>(key: K, value: ProjectFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -1069,7 +1071,7 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
 
             {/* Produtos */}
             <div>
-              <div className="flex items-center justify-between mb-3 pb-1.5 border-b border-border/40">
+              <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border/40">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Produtos do Projeto
                 </h4>
@@ -1080,107 +1082,139 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                 )}
               </div>
 
-              {activeProducts.length === 0 ? (
-                /* Fallback para lista estática se não houver produtos cadastrados */
-                <div className="grid grid-cols-1 gap-1.5">
-                  <p className="text-xs text-muted-foreground/60 mb-1">
-                    Nenhum produto no catálogo ainda.{" "}
-                    <span className="text-primary">Cadastre produtos na aba "Catálogo de Produtos".</span>
-                  </p>
-                  {PRODUTOS_LIST.map((p) => {
-                    const checked = (form.produtos ?? []).includes(p);
-                    return (
-                      <label key={p} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 cursor-pointer hover:bg-secondary/40 transition-colors">
-                        <button type="button" onClick={() => toggleProduto(p)}
-                          className={`w-4 h-4 rounded flex items-center justify-center border transition-colors flex-shrink-0 ${checked ? "bg-primary border-primary text-primary-foreground" : "border-border/60 bg-secondary/40"}`}>
-                          {checked && <Check size={10} />}
-                        </button>
-                        <span className="text-sm">{p}</span>
-                      </label>
-                    );
-                  })}
+              {/* Chips dos produtos selecionados */}
+              {(form.produtos ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {(form.produtos ?? []).map((p) => (
+                    <span
+                      key={p}
+                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium"
+                    >
+                      {p}
+                      <button
+                        type="button"
+                        onClick={() => toggleProduto(p)}
+                        className="hover:text-red-400 transition-colors ml-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
                 </div>
+              )}
+
+              {activeProducts.length === 0 ? (
+                <p className="text-xs text-muted-foreground/60">
+                  Nenhum produto no catálogo ainda.{" "}
+                  <span className="text-primary">Cadastre produtos na aba "Catálogo de Produtos".</span>
+                </p>
               ) : (
-                /* Catálogo dinâmico agrupado por categoria */
-                <div className="space-y-3">
-                  {PRODUCT_CATEGORIES.filter((cat) => activeProducts.some((p) => p.category === cat.id)).map((cat) => {
-                    const catProducts = activeProducts.filter((p) => p.category === cat.id);
+                <>
+                  {/* Busca + filtro de categoria */}
+                  <div className="flex gap-2 mb-3">
+                    <div className="relative flex-1">
+                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                      <input
+                        type="text"
+                        placeholder="Buscar produto..."
+                        value={prodSearch}
+                        onChange={(e) => setProdSearch(e.target.value)}
+                        className="w-full pl-7 pr-3 py-1.5 text-xs bg-secondary/40 border border-border/60 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/40"
+                      />
+                    </div>
+                    <select
+                      value={prodCat}
+                      onChange={(e) => setProdCat(e.target.value)}
+                      className="text-xs bg-secondary/40 border border-border/60 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50 text-muted-foreground"
+                    >
+                      <option value="all">Todas</option>
+                      {PRODUCT_CATEGORIES.filter((cat) => activeProducts.some((p) => p.category === cat.id)).map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Lista filtrada */}
+                  {(() => {
+                    const q = prodSearch.toLowerCase().trim();
+                    const visible = activeProducts.filter((p) => {
+                      const matchCat = prodCat === "all" || p.category === prodCat;
+                      const matchQ   = !q || p.name.toLowerCase().includes(q);
+                      return matchCat && matchQ;
+                    });
+                    if (visible.length === 0) {
+                      return <p className="text-xs text-muted-foreground/50 py-2 text-center">Nenhum produto encontrado</p>;
+                    }
                     return (
-                      <div key={cat.id}>
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                          <span>{cat.icon}</span>{cat.label}
-                        </p>
-                        <div className="space-y-1">
-                          {catProducts.map((prod) => {
-                            const checked = (form.produtos ?? []).includes(prod.name);
-                            const isRecurring = prod.billing_type === "recurring";
-                            return (
-                              <div key={prod.id}
-                                className={`rounded-xl border transition-colors ${checked ? "border-primary/30 bg-primary/5" : "border-border/40 bg-secondary/20"}`}
-                              >
-                                <div className="flex items-center gap-2.5 px-3 py-2.5">
-                                  {/* Checkbox */}
-                                  <button type="button" onClick={() => toggleProduto(prod.name)}
-                                    className={`w-4 h-4 rounded flex items-center justify-center border transition-colors flex-shrink-0 ${checked ? "bg-primary border-primary text-primary-foreground" : "border-border/60 bg-secondary/40"}`}>
-                                    {checked && <Check size={10} />}
-                                  </button>
-
-                                  {/* Nome + badge tipo */}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-sm font-medium">{prod.name}</span>
-                                      <span
-                                        className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-                                        style={{
-                                          color: isRecurring ? "#22c55e" : "#60a5fa",
-                                          backgroundColor: isRecurring ? "#22c55e18" : "#3b82f618",
-                                        }}
-                                      >
-                                        {isRecurring ? "Recorrente" : "One-time"}
-                                      </span>
-                                    </div>
-                                    {prod.default_price > 0 && !checked && (
-                                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-                                        Padrão: {formatPrice(prod.default_price)}{isRecurring ? "/mês" : ""}
-                                      </p>
-                                    )}
+                      <div className="space-y-1 max-h-52 overflow-y-auto pr-0.5">
+                        {visible.map((prod) => {
+                          const checked      = (form.produtos ?? []).includes(prod.name);
+                          const isRecurring  = prod.billing_type === "recurring";
+                          return (
+                            <div
+                              key={prod.id}
+                              className={`rounded-xl border transition-colors ${checked ? "border-primary/30 bg-primary/5" : "border-border/40 bg-secondary/20"}`}
+                            >
+                              <div className="flex items-center gap-2.5 px-3 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleProduto(prod.name)}
+                                  className={`w-4 h-4 rounded flex items-center justify-center border transition-colors flex-shrink-0 ${checked ? "bg-primary border-primary text-primary-foreground" : "border-border/60 bg-secondary/40"}`}
+                                >
+                                  {checked && <Check size={10} />}
+                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-sm font-medium">{prod.name}</span>
+                                    <span
+                                      className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                                      style={{
+                                        color: isRecurring ? "#22c55e" : "#f59e0b",
+                                        backgroundColor: isRecurring ? "#22c55e18" : "#f59e0b18",
+                                      }}
+                                    >
+                                      {isRecurring ? "Recorrente" : "One-time"}
+                                    </span>
                                   </div>
-
-                                  {/* Campo de valor editável quando selecionado */}
-                                  {checked && (
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                      <span className="text-xs text-muted-foreground">R$</span>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        step={1}
-                                        placeholder={String(prod.default_price || 0)}
-                                        value={form.mrr && (form.produtos ?? []).filter(x => {
-                                          const pp = activeProducts.find(a => a.name === x);
-                                          return pp?.billing_type === "recurring";
-                                        }).length === 1 && isRecurring ? (form.mrr ?? "") : ""}
-                                        onChange={(e) => {
-                                          const val = parseFloat(e.target.value) || 0;
-                                          if (isRecurring) set("mrr", val || undefined);
-                                          else set("investimento", val || undefined);
-                                        }}
-                                        className="w-24 bg-background border border-border/60 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 text-right"
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                      <span className="text-[10px] text-muted-foreground/60">
-                                        {isRecurring ? "/mês" : "único"}
-                                      </span>
-                                    </div>
+                                  {prod.default_price > 0 && !checked && (
+                                    <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                                      Padrão: {formatPrice(prod.default_price)}{isRecurring ? "/mês" : ""}
+                                    </p>
                                   )}
                                 </div>
+                                {checked && (
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <span className="text-xs text-muted-foreground">R$</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      placeholder={String(prod.default_price || 0)}
+                                      value={form.mrr && (form.produtos ?? []).filter(x => {
+                                        const pp = activeProducts.find(a => a.name === x);
+                                        return pp?.billing_type === "recurring";
+                                      }).length === 1 && isRecurring ? (form.mrr ?? "") : ""}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        if (isRecurring) set("mrr", val || undefined);
+                                        else set("investimento", val || undefined);
+                                      }}
+                                      className="w-24 bg-background border border-border/60 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 text-right"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <span className="text-[10px] text-muted-foreground/60">
+                                      {isRecurring ? "/mês" : "único"}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
-                  })}
-                </div>
+                  })()}
+                </>
               )}
             </div>
 
