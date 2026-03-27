@@ -28,9 +28,9 @@ import {
 
 const JOURNEY_STAGES = [
   { id: "onboarding", label: "Onboarding", short: "ON", color: "#8b5cf6" },
-  { id: "month_01",   label: "Mês 01",     short: "M1",  color: "#3b82f6" },
-  { id: "month_02",   label: "Mês 02",     short: "M2",  color: "#3b82f6" },
-  { id: "month_03",   label: "Mês 03",     short: "M3",  color: "#3b82f6" },
+  { id: "month_01",   label: "Mês 01",     short: "M1",  color: "#8b5cf6" },
+  { id: "month_02",   label: "Mês 02",     short: "M2",  color: "#8b5cf6" },
+  { id: "month_03",   label: "Mês 03",     short: "M3",  color: "#8b5cf6" },
   { id: "month_06",   label: "Mês 06",     short: "M6",  color: "#06b6d4" },
   { id: "month_12",   label: "Mês 12",     short: "M12", color: "#22c55e" },
   { id: "month_18",   label: "Mês 18",     short: "M18", color: "#f59e0b" },
@@ -55,7 +55,7 @@ function getJourneyLabel(id: string | null | undefined): string {
 function getJourneyColor(id: string | null | undefined): string {
   if (!id || id === "onboarding") return "#8b5cf6";
   const num = parseInt(id.replace("month_", ""), 10);
-  if (num <= 3)  return "#3b82f6";
+  if (num <= 3)  return "#8b5cf6";
   if (num <= 6)  return "#06b6d4";
   if (num <= 12) return "#22c55e";
   if (num <= 18) return "#f59e0b";
@@ -68,7 +68,7 @@ const SITUATION_CONFIG: Record<string, { label: string; color: string; bg: strin
   green:  { label: "Saudável",   color: "#22c55e", bg: "#22c55e18" },
   yellow: { label: "Atenção",    color: "#f59e0b", bg: "#f59e0b18" },
   red:    { label: "Em Risco",   color: "#ef4444", bg: "#ef444418" },
-  blue:   { label: "Upsell",     color: "#3b82f6", bg: "#3b82f618" },
+  blue:   { label: "Upsell",     color: "#8b5cf6", bg: "#8b5cf618" },
   gray:   { label: "Inativo",    color: "#6b7280", bg: "#6b728018" },
 };
 
@@ -139,7 +139,7 @@ function buildCohorts(clients: Client[]): CohortGroup[] {
 const PIPELINE_STAGES = [
   { id: "prospect", label: "Prospect",  color: "#6b7280" },
   { id: "active",   label: "Ativo",     color: "#22c55e" },
-  { id: "upsell",   label: "Upsell",    color: "#3b82f6" },
+  { id: "upsell",   label: "Upsell",    color: "#8b5cf6" },
   { id: "at_risk",  label: "Em Risco",  color: "#f59e0b" },
   { id: "churned",  label: "Churned",   color: "#ef4444" },
 ];
@@ -1210,7 +1210,7 @@ function ClientDetailSidebar({
                   }
 
                   // Paleta de cores — uma cor por projeto
-                  const PALETA = ["#22c55e","#3b82f6","#f59e0b","#8b5cf6","#06b6d4","#ef4444","#ec4899"];
+                  const PALETA = ["#22c55e","#8b5cf6","#f59e0b","#8b5cf6","#06b6d4","#ef4444","#ec4899"];
                   const projColor = (idx: number) => PALETA[idx % PALETA.length];
 
                   // Para cada mês, calcula receita de cada projeto
@@ -1222,12 +1222,19 @@ function ClientDetailSidebar({
                       if (!p.start_date) return { p, idx, receita: 0, ativo: false };
                       const ps = new Date(p.start_date);
                       const pe = p.end_date ? new Date(p.end_date) : null;
-                      const ativo = ps <= mEnd && (!pe || pe >= mStart);
+                      const isRecorrente = ACTIVE_MOMENTOS.includes(p.momento as Parameters<typeof ACTIVE_MOMENTOS["includes"]>[0]);
+
+                      let ativo: boolean;
+                      if (isRecorrente) {
+                        // Recorrente: aparece em todos os meses entre start e end (ou até hoje)
+                        ativo = ps <= mEnd && (!pe || pe >= mStart);
+                      } else {
+                        // One-time: aparece apenas no mês do start_date (pagamento único)
+                        ativo = ps >= mStart && ps <= mEnd;
+                      }
+
                       if (!ativo) return { p, idx, receita: 0, ativo: false };
-                      // Receita do projeto neste mês = mrr + ee (se no período de EE)
-                      let receita = p.mrr ?? 0;
-                      // Estruturação Estratégica: só no período inicio_ee → fim_ee (se existir)
-                      // Aqui simplificamos: ee já está separado no campo, não somamos novamente
+                      const receita = p.mrr ?? 0;
                       return { p, idx, receita, ativo: true };
                     }).filter((x) => x.ativo && x.receita > 0);
 
@@ -1255,9 +1262,9 @@ function ClientDetailSidebar({
                           <p className="text-base font-bold text-emerald-400">{formatCurrency(receitaRecorrente)}<span className="text-[10px] font-normal text-emerald-400/60">/mês</span></p>
                           <p className="text-[9px] text-muted-foreground/50 mt-0.5">{ativos.length} projeto{ativos.length !== 1 ? "s" : ""}</p>
                         </div>
-                        <div className="rounded-xl bg-blue-500/8 border border-blue-500/20 px-3 py-2">
-                          <p className="text-[10px] text-blue-400/80 font-medium">One-time gerado</p>
-                          <p className="text-base font-bold text-blue-400">{formatCurrency(receitaOnetimeAcum)}</p>
+                        <div className="rounded-xl bg-violet-500/8 border border-violet-500/20 px-3 py-2">
+                          <p className="text-[10px] text-violet-400/80 font-medium">One-time gerado</p>
+                          <p className="text-base font-bold text-violet-400">{formatCurrency(receitaOnetimeAcum)}</p>
                           <p className="text-[9px] text-muted-foreground/50 mt-0.5">{encerrados.length} projeto{encerrados.length !== 1 ? "s" : ""} encerrado{encerrados.length !== 1 ? "s" : ""}</p>
                         </div>
                       </div>
@@ -1513,7 +1520,7 @@ function ClientDetailSidebar({
                             <div className="flex items-center gap-1.5">
                               <p className="text-xs font-medium">{interaction.title}</p>
                               {isGcal && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-medium">
                                   Google Meet
                                 </span>
                               )}
@@ -1967,7 +1974,7 @@ function StatsBar({ clients }: { clients: Client[] }) {
 
   const stats = [
     { label: "MRR Total",       value: formatCurrency(totalMrr), icon: <DollarSign size={14} />, color: "#22c55e" },
-    { label: "LTV Total",       value: formatCurrency(totalLtv), icon: <TrendingUp size={14} />,  color: "#3b82f6" },
+    { label: "LTV Total",       value: formatCurrency(totalLtv), icon: <TrendingUp size={14} />,  color: "#8b5cf6" },
     { label: "Clientes Ativos", value: active.length,            icon: <Users size={14} />,       color: "#22c55e" },
     { label: "Em Risco",        value: atRisk.length,            icon: <AlertTriangle size={14} />, color: "#f59e0b" },
     { label: "NPS Médio",       value: avgNps ?? "—",            icon: <Star size={14} />,        color: avgNps !== null ? getNpsColor(avgNps) : "#6b7280" },
@@ -3000,7 +3007,7 @@ function CohortSummaryHeader({ cohorts }: { cohorts: CohortGroup[] }) {
       {[
         { label: "Safras",              value: cohorts.length,            icon: <Layers size={14} />,       color: "#8b5cf6" },
         { label: "MRR Ativo",           value: formatCurrency(totalMrr),  icon: <DollarSign size={14} />,   color: "#22c55e" },
-        { label: "Margem LTV Acum.",    value: formatCurrency(totalLtvMgn), icon: <TrendingUp size={14} />,   color: "#3b82f6" },
+        { label: "Margem LTV Acum.",    value: formatCurrency(totalLtvMgn), icon: <TrendingUp size={14} />,   color: "#8b5cf6" },
         { label: "Retenção",            value: `${retention}%`,           icon: <Users size={14} />,        color: retention >= 80 ? "#22c55e" : retention >= 60 ? "#f59e0b" : "#ef4444" },
       ].map((s) => (
         <div
@@ -3062,7 +3069,7 @@ function CohortCard({
             <p className="text-[10px] text-muted-foreground">MRR ativo</p>
           </div>
           <div className="text-right">
-            <p className="font-bold" style={{ color: "#3b82f6" }}>{formatCurrency(totalLtvMgn)}</p>
+            <p className="font-bold" style={{ color: "#8b5cf6" }}>{formatCurrency(totalLtvMgn)}</p>
             <p className="text-[10px] text-muted-foreground">Margem LTV</p>
           </div>
           <div className="text-right">
@@ -3225,7 +3232,7 @@ function CohortClientRow({
 
       {/* Margem LTV acumulada */}
       <div className="flex-shrink-0 w-24 text-right">
-        <p className="text-xs font-bold text-blue-400">{ltvMargin > 0 ? formatCurrency(ltvMargin) : "—"}</p>
+        <p className="text-xs font-bold text-violet-400">{ltvMargin > 0 ? formatCurrency(ltvMargin) : "—"}</p>
         <p className="text-[10px] text-muted-foreground">margem LTV</p>
       </div>
 

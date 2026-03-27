@@ -123,7 +123,7 @@ function getMomentoBadgeConfig(momento: string | undefined | null): BadgeConfig 
   if (momento.includes("Ongoing"))
     return { bg: "bg-green-500/10", text: "text-green-600 dark:text-green-400", border: "border-green-500/20" };
   if (momento.includes("Onboarding"))
-    return { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", border: "border-blue-500/20" };
+    return { bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", border: "border-violet-500/20" };
   if (momento.includes("Implementação"))
     return { bg: "bg-yellow-500/10", text: "text-yellow-600 dark:text-yellow-400", border: "border-yellow-500/20" };
   if (momento.includes("Atrasado"))
@@ -312,7 +312,7 @@ function KanbanCard({ project, filterSetor, onClick, onEdit, onDelete }: KanbanC
           </span>
         )}
         {project.usa && (
-          <span className="text-[9px] font-semibold text-blue-500 bg-blue-500/10 border border-blue-500/20 rounded px-1 py-0.5">
+          <span className="text-[9px] font-semibold text-violet-500 bg-violet-500/10 border border-violet-500/20 rounded px-1 py-0.5">
             🇺🇸
           </span>
         )}
@@ -507,7 +507,7 @@ function ListView({ projects, onRowClick, onEdit, onDelete }: ListViewProps) {
                   <div>
                     <p className="font-medium text-sm leading-tight truncate max-w-[200px]">{project.name}</p>
                     {project.usa && (
-                      <span className="text-[10px] text-blue-500 font-medium">🇺🇸 USA</span>
+                      <span className="text-[10px] text-violet-500 font-medium">🇺🇸 USA</span>
                     )}
                   </div>
                 </td>
@@ -643,7 +643,7 @@ function DetailModal({ project, onClose, onEdit }: DetailModalProps) {
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold truncate">{project.name}</h2>
                 {project.usa && (
-                  <span className="text-xs font-semibold text-blue-500 bg-blue-500/10 border border-blue-500/20 rounded px-1.5 py-0.5">
+                  <span className="text-xs font-semibold text-violet-500 bg-violet-500/10 border border-violet-500/20 rounded px-1.5 py-0.5">
                     🇺🇸 USA
                   </span>
                 )}
@@ -1027,7 +1027,7 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                   onClick={() => set("usa", !form.usa)}
                   className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${
                     form.usa
-                      ? "bg-blue-500 border-blue-500 text-white"
+                      ? "bg-violet-500 border-violet-500 text-white"
                       : "border-border/60 bg-secondary/40"
                   }`}
                 >
@@ -1550,7 +1550,7 @@ function ProductModal({ initial, onSave, onClose }: ProductModalProps) {
                   onClick={() => set("billing_type", "one_time")}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium transition-colors ${
                     form.billing_type === "one_time"
-                      ? "bg-blue-500/15 border-blue-500/40 text-blue-400"
+                      ? "bg-violet-500/15 border-violet-500/40 text-violet-400"
                       : "border-border/60 text-muted-foreground hover:bg-secondary/60"
                   }`}
                 >
@@ -1694,13 +1694,13 @@ function ProductCatalogTab() {
             <p className="text-lg font-bold text-green-400">{recurring.length}</p>
           </div>
         </div>
-        <div className="glass border border-blue-500/20 rounded-xl p-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-            <ShoppingCart size={16} className="text-blue-400" />
+        <div className="glass border border-violet-500/20 rounded-xl p-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+            <ShoppingCart size={16} className="text-violet-400" />
           </div>
           <div>
             <p className="text-xs text-muted-foreground">One-time</p>
-            <p className="text-lg font-bold text-blue-400">{onetime.length}</p>
+            <p className="text-lg font-bold text-violet-400">{onetime.length}</p>
           </div>
         </div>
       </div>
@@ -1732,7 +1732,7 @@ function ProductCatalogTab() {
           onClick={() => setFilterBilling(filterBilling === "one_time" ? "" : "one_time")}
           className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs font-medium transition-colors ${
             filterBilling === "one_time"
-              ? "bg-blue-500/15 border-blue-500/40 text-blue-400"
+              ? "bg-violet-500/15 border-violet-500/40 text-violet-400"
               : "border-border/60 text-muted-foreground hover:bg-secondary/60"
           }`}
         >
@@ -1805,11 +1805,11 @@ function ProductCatalogTab() {
                       {/* Type badge */}
                       <div
                         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: product.billing_type === "recurring" ? "#22c55e18" : "#3b82f618" }}
+                        style={{ backgroundColor: product.billing_type === "recurring" ? "#22c55e18" : "#8b5cf618" }}
                       >
                         {product.billing_type === "recurring"
                           ? <Repeat size={14} className="text-green-400" />
-                          : <ShoppingCart size={14} className="text-blue-400" />
+                          : <ShoppingCart size={14} className="text-violet-400" />
                         }
                       </div>
 
@@ -1822,8 +1822,8 @@ function ProductCatalogTab() {
                           <span
                             className="text-[10px] px-1.5 py-0.5 rounded-md font-medium"
                             style={{
-                              color: product.billing_type === "recurring" ? "#22c55e" : "#60a5fa",
-                              backgroundColor: product.billing_type === "recurring" ? "#22c55e18" : "#3b82f618",
+                              color: product.billing_type === "recurring" ? "#22c55e" : "#a78bfa",
+                              backgroundColor: product.billing_type === "recurring" ? "#22c55e18" : "#8b5cf618",
                             }}
                           >
                             {product.billing_type === "recurring" ? "Recorrente" : "One-time"}

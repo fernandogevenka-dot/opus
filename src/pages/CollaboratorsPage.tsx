@@ -88,11 +88,11 @@ interface AreaConfig {
 
 const AREA_COLORS: Record<string, AreaConfig> = {
   "PE&G": {
-    bg: "bg-blue-500/10",
-    text: "text-blue-400",
-    border: "border-blue-500/20",
-    avatar: "bg-blue-500/20 text-blue-300",
-    dot: "bg-blue-400",
+    bg: "bg-violet-500/10",
+    text: "text-violet-400",
+    border: "border-violet-500/20",
+    avatar: "bg-violet-500/20 text-violet-300",
+    dot: "bg-violet-400",
   },
   CS: {
     bg: "bg-green-500/10",
@@ -348,7 +348,7 @@ function CollaboratorCard({
             <a
               href={`mailto:${c.email}`}
               onClick={(e) => e.stopPropagation()}
-              className="w-6 h-6 rounded-md bg-secondary/60 hover:bg-blue-500/20 hover:text-blue-400 flex items-center justify-center transition-colors"
+              className="w-6 h-6 rounded-md bg-secondary/60 hover:bg-violet-500/20 hover:text-violet-400 flex items-center justify-center transition-colors"
               title={c.email}
             >
               <Mail size={11} />
@@ -1134,7 +1134,7 @@ function DetailPanel({
                     href={`mailto:${collaborator.email}`}
                     className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-secondary/40 transition-colors group"
                   >
-                    <Mail size={14} className="text-muted-foreground group-hover:text-blue-400 transition-colors" />
+                    <Mail size={14} className="text-muted-foreground group-hover:text-violet-400 transition-colors" />
                     <span className="text-sm text-foreground/80 group-hover:text-foreground transition-colors">
                       {collaborator.email}
                     </span>
@@ -1461,7 +1461,7 @@ export function CollaboratorsPage() {
           label="Áreas"
           value={topAreas.map((a) => `${a.area} (${a.count})`).join(" · ") || "—"}
           sub={`${AREAS.filter((a) => (byArea[a] ?? 0) > 0).length} áreas ativas`}
-          color="bg-blue-500/10 text-blue-400"
+          color="bg-violet-500/10 text-violet-400"
         />
         <StatCard
           icon={Briefcase}

@@ -43,7 +43,7 @@ type DeskTheme = "dark" | "neon" | "minimal" | "cozy" | "rgb" | "nature";
 
 // ─── Office rooms (mirrors OfficeCanvas ROOMS) ────────────────────────────────
 const OFFICE_ROOMS = [
-  { id: "sales",     name: "Vendas",    icon: "🏆", color: "#3b82f6" },
+  { id: "sales",     name: "Vendas",    icon: "🏆", color: "#8b5cf6" },
   { id: "meetings",  name: "Reuniões",  icon: "📋", color: "#8b5cf6" },
   { id: "direction", name: "Diretoria", icon: "👔", color: "#f59e0b" },
   { id: "lounge",    name: "Lounge",    icon: "☕", color: "#10b981" },
@@ -90,7 +90,7 @@ const ITEM_BY_TYPE = Object.fromEntries(DESK_ITEMS.map((d) => [d.type, d])) as R
 
 const RARITY = {
   common:    { label: "Common",    color: "#94a3b8", glow: "#94a3b815", border: "#94a3b830" },
-  rare:      { label: "Rare",      color: "#3b82f6", glow: "#3b82f620", border: "#3b82f640" },
+  rare:      { label: "Rare",      color: "#8b5cf6", glow: "#8b5cf620", border: "#8b5cf640" },
   epic:      { label: "Epic",      color: "#a855f7", glow: "#a855f730", border: "#a855f750" },
   legendary: { label: "Legendary", color: "#f59e0b", glow: "#f59e0b30", border: "#f59e0b60" },
 };
