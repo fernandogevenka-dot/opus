@@ -69,7 +69,8 @@ const ALL_NAV: NavItem[] = [
   { id: "wa-cs",          label: "WhatsApp CS",          icon: "MessageCircle", section: "work" },
   { id: "user-approval",  label: "Aprovação",            icon: "ShieldCheck",  section: "admin" },
   { id: "office-settings",label: "Configurações",        icon: "Settings",     section: "admin" },
-  { id: "desk-customize", label: "Minha Mesa",           icon: "Armchair",     section: "admin" },
+  { id: "desk-customize",    label: "Minha Mesa",        icon: "Armchair",     section: "admin" },
+  { id: "feature-requests",  label: "Melhorias",         icon: "Lightbulb",    section: "main"  },
 ];
 
 export function usePermissions(): Permissions {
