@@ -23,6 +23,7 @@ import {
 import { useSquadsData, type Squad, type SquadMember, type SquadProjectDetail } from "@/hooks/useSquadsData";
 import { useAuthStore } from "@/store/authStore";
 import { useAppStore } from "@/store/appStore";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -883,15 +884,13 @@ export function SquadsPage() {
   const { user } = useAuthStore();
   const { navigateToProfile } = useAppStore();
   const { squads, loading, error, totalMRR, totalMembers, saveSquad, deleteSquad } = useSquadsData();
+  const permissions = usePermissions();
 
   const [selectedSquad, setSelectedSquad] = useState<Squad | null>(null);
   const [editingSquad, setEditingSquad] = useState<Squad | null | undefined>(undefined);
   // undefined = modal closed, null = creating new, Squad = editing existing
 
-  const isAdmin = useMemo(
-    () => !!(user?.role && ["admin", "manager", "gestor"].includes(user.role.toLowerCase())),
-    [user]
-  );
+  const isAdmin = permissions.gerenciar_squads;
 
   // Color index map: stable by squad id
   const colorIndexMap = useMemo(() => {
