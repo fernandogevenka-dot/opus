@@ -23,6 +23,21 @@ export type OpusRole =
 
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
+export type CargoPrincipal = "Diretor" | "Gerente" | "Coordenador" | "Investidor";
+
+/** Permissões granulares — salvas como JSONB no banco */
+export interface UserPermissions {
+  ver_todos_projetos: boolean;
+  ver_remuneracoes: boolean;
+  ver_todos_clientes: boolean;
+  ver_financeiro: boolean;
+  editar_projetos: boolean;
+  editar_colaboradores: boolean;
+  gerenciar_squads: boolean;
+  aprovar_usuarios: boolean;
+  configuracoes: boolean;
+}
+
 export interface User {
   id: string;
   google_id: string;
@@ -34,7 +49,10 @@ export interface User {
   opus_role: OpusRole;
   approval_status: ApprovalStatus;
   funcao: string | null;
+  cargo_titulo: CargoPrincipal | null;
   squad_id: string | null;
+  colaborador_id: string | null;
+  permissions: UserPermissions | null;
   title_active_id: string | null;
   title_active?: Title;
   xp: number;
