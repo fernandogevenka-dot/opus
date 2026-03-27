@@ -76,8 +76,12 @@ export function usePermissions(): Permissions {
   const { user } = useAuthStore();
   const role: OpusRole = user?.opus_role ?? "pending";
 
-  // Usar permissões do banco se disponíveis, senão fallback por role
-  const p: UserPermissions = user?.permissions ?? ROLE_DEFAULTS[role] ?? ROLE_DEFAULTS["pending"];
+  // Usar permissões do banco se disponíveis e não vazias, senão fallback por role
+  const hasStoredPermissions =
+    user?.permissions != null && Object.keys(user.permissions).length > 0;
+  const p: UserPermissions = hasStoredPermissions
+    ? user!.permissions!
+    : ROLE_DEFAULTS[role] ?? ROLE_DEFAULTS["pending"];
 
   const isAdmin = role === "admin";
   const isFullAccess = p.aprovar_usuarios && p.ver_financeiro;
