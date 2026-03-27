@@ -2,10 +2,11 @@ import { useState, useRef } from "react";
 import {
   Pencil, Check, X, Plus, Trash2, Linkedin, Phone, Mail,
   MapPin, Building2, Calendar, Clock, Award, GraduationCap,
-  Briefcase, Star, ChevronDown, ChevronUp, Upload, Save,
+  Briefcase, Star, ChevronDown, ChevronUp, Upload, Save, Loader2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useProfile } from "@/hooks/useProfile";
+import { supabase } from "@/lib/supabase";
 import type {
   ProfileSkill, CareerEntry, EducationEntry, CertificationEntry,
   SkillLevel, SkillCategory, Departamento, LocalTrabalho,
@@ -259,6 +260,57 @@ export function UserProfilePage({ viewUserId }: { viewUserId?: string }) {
     setShowCertForm(false);
   }
 
+  // ── Upload handlers ───────────────────────────────────────────────────────────
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover,  setUploadingCover]  = useState(false);
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingAvatar(true);
+    try {
+      const ext  = file.name.split(".").pop() ?? "jpg";
+      const path = `avatars/${user.id}/avatar.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("profile-media")
+        .upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("profile-media").getPublicUrl(path);
+      // Bust cache com timestamp
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      await supabase.from("users").update({ avatar_url: publicUrl }).eq("id", user.id);
+      await saveProfile({ cover_url: profile?.cover_url ?? null }); // força re-fetch do profile
+      window.location.reload(); // recarrega para refletir novo avatar em toda a UI
+    } catch (err) {
+      console.error("[Avatar upload]", err);
+      alert("Erro ao fazer upload da foto. Verifique o tamanho do arquivo e tente novamente.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingCover(true);
+    try {
+      const ext  = file.name.split(".").pop() ?? "jpg";
+      const path = `covers/${user.id}/cover.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("profile-media")
+        .upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("profile-media").getPublicUrl(path);
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      await saveProfile({ cover_url: publicUrl });
+    } catch (err) {
+      console.error("[Cover upload]", err);
+      alert("Erro ao fazer upload da capa. Verifique o tamanho do arquivo e tente novamente.");
+    } finally {
+      setUploadingCover(false);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -291,8 +343,8 @@ export function UserProfilePage({ viewUserId }: { viewUserId?: string }) {
         >
           {isOwn && (
             <label className="absolute top-3 right-3 cursor-pointer bg-black/40 hover:bg-black/60 rounded-lg p-1.5 text-white transition-colors">
-              <Upload size={13} />
-              <input type="file" className="hidden" accept="image/*" />
+              {uploadingCover ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+              <input type="file" className="hidden" accept="image/*" onChange={handleCoverUpload} disabled={uploadingCover} />
             </label>
           )}
         </div>
@@ -308,8 +360,8 @@ export function UserProfilePage({ viewUserId }: { viewUserId?: string }) {
               />
               {isOwn && (
                 <label className="absolute bottom-0 right-0 cursor-pointer bg-primary rounded-full p-1 shadow">
-                  <Pencil size={10} className="text-white" />
-                  <input type="file" className="hidden" accept="image/*" />
+                  {uploadingAvatar ? <Loader2 size={10} className="text-white animate-spin" /> : <Pencil size={10} className="text-white" />}
+                  <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={uploadingAvatar} />
                 </label>
               )}
             </div>
