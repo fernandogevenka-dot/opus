@@ -811,17 +811,40 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
   const [prodSearch, setProdSearch] = useState("");
   const [prodCat, setProdCat]       = useState<string>("all");
 
+  // Mapa produto → valor negociado (inicializado a partir do projeto existente)
+  const [produtoValores, setProdutoValores] = useState<Record<string, number>>(() => {
+    if (!project) return {};
+    const map: Record<string, number> = {};
+    const prods = project.produtos ?? [];
+    // distribui mrr/investimento igualmente pelos produtos existentes como ponto de partida
+    if (prods.length === 1) {
+      const p = activeProducts.find((a) => a.name === prods[0]);
+      if (p) map[prods[0]] = p.billing_type === "recurring" ? (project.mrr ?? 0) : (project.investimento ?? 0);
+    }
+    return map;
+  });
+
   function set<K extends keyof ProjectFormData>(key: K, value: ProjectFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function toggleProduto(p: string) {
+  function toggleProduto(nome: string) {
     const cur = form.produtos ?? [];
-    if (cur.includes(p)) {
-      set("produtos", cur.filter((x) => x !== p));
+    if (cur.includes(nome)) {
+      set("produtos", cur.filter((x) => x !== nome));
+      setProdutoValores((v) => { const next = { ...v }; delete next[nome]; return next; });
     } else {
-      set("produtos", [...cur, p]);
+      set("produtos", [...cur, nome]);
+      // pré-preenche com preço padrão do catálogo
+      const prod = activeProducts.find((p) => p.name === nome);
+      if (prod && prod.default_price > 0) {
+        setProdutoValores((v) => ({ ...v, [nome]: prod.default_price }));
+      }
     }
+  }
+
+  function setProdutoValor(nome: string, valor: number) {
+    setProdutoValores((v) => ({ ...v, [nome]: valor }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -832,8 +855,23 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
     }
     setSaving(true);
     setError(null);
+
+    // Calcular mrr e investimento a partir dos valores por produto
+    const selectedProds = form.produtos ?? [];
+    let totalMrr = 0;
+    let totalInv = 0;
+    for (const nome of selectedProds) {
+      const prod  = activeProducts.find((p) => p.name === nome);
+      const valor = produtoValores[nome] ?? 0;
+      if (prod?.billing_type === "recurring") totalMrr += valor;
+      else totalInv += valor;
+    }
+    // Se não há produtos cadastrados no catálogo, usa os campos diretos do form
+    const finalMrr = selectedProds.length > 0 && activeProducts.length > 0 ? (totalMrr || undefined) : form.mrr;
+    const finalInv = selectedProds.length > 0 && activeProducts.length > 0 ? (totalInv || undefined) : form.investimento;
+
     try {
-      await onSave(form, project?.id);
+      await onSave({ ...form, mrr: finalMrr, investimento: finalInv }, project?.id);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar projeto");
@@ -1082,26 +1120,47 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                 )}
               </div>
 
-              {/* Chips dos produtos selecionados */}
-              {(form.produtos ?? []).length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {(form.produtos ?? []).map((p) => (
-                    <span
-                      key={p}
-                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium"
-                    >
-                      {p}
-                      <button
-                        type="button"
-                        onClick={() => toggleProduto(p)}
-                        className="hover:text-red-400 transition-colors ml-0.5"
-                      >
-                        <X size={10} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+              {/* Chips + totalizador dos produtos selecionados */}
+              {(form.produtos ?? []).length > 0 && (() => {
+                const selProds = form.produtos ?? [];
+                let sumMrr = 0, sumInv = 0;
+                for (const nome of selProds) {
+                  const prod = activeProducts.find((p) => p.name === nome);
+                  const val  = produtoValores[nome] ?? 0;
+                  if (prod?.billing_type === "recurring") sumMrr += val;
+                  else sumInv += val;
+                }
+                return (
+                  <div className="mb-3 space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {selProds.map((p) => (
+                        <span
+                          key={p}
+                          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium"
+                        >
+                          {p}
+                          {produtoValores[p] ? (
+                            <span className="text-primary/60 ml-0.5">{formatPrice(produtoValores[p])}</span>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => toggleProduto(p)}
+                            className="hover:text-red-400 transition-colors ml-0.5"
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    {(sumMrr > 0 || sumInv > 0) && (
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground px-1">
+                        {sumMrr > 0 && <span>MRR: <strong className="text-foreground">{formatPrice(sumMrr)}/mês</strong></span>}
+                        {sumInv > 0 && <span>One-time: <strong className="text-foreground">{formatPrice(sumInv)}</strong></span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {activeProducts.length === 0 ? (
                 <p className="text-xs text-muted-foreground/60">
@@ -1190,15 +1249,8 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                                       min={0}
                                       step={1}
                                       placeholder={String(prod.default_price || 0)}
-                                      value={form.mrr && (form.produtos ?? []).filter(x => {
-                                        const pp = activeProducts.find(a => a.name === x);
-                                        return pp?.billing_type === "recurring";
-                                      }).length === 1 && isRecurring ? (form.mrr ?? "") : ""}
-                                      onChange={(e) => {
-                                        const val = parseFloat(e.target.value) || 0;
-                                        if (isRecurring) set("mrr", val || undefined);
-                                        else set("investimento", val || undefined);
-                                      }}
+                                      value={produtoValores[prod.name] ?? ""}
+                                      onChange={(e) => setProdutoValor(prod.name, parseFloat(e.target.value) || 0)}
                                       className="w-24 bg-background border border-border/60 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 text-right"
                                       onClick={(e) => e.stopPropagation()}
                                     />
