@@ -10,7 +10,7 @@ import {
   DollarSign, Star, Phone, Mail, Clock,
   BarChart3, Calendar, RefreshCw, CheckCircle2,
   ChevronDown, Package, UserCheck, Zap, Filter, Layers, Briefcase,
-  FileText, Link, Building2, MapPin, CreditCard, Sparkles, Upload,
+  FileText, Link, Building2, MapPin, CreditCard, Sparkles, Upload, Pencil,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { timeAgo } from "@/lib/utils";
@@ -933,6 +933,7 @@ function ClientDetailSidebar({
   const [noteText, setNoteText] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [showChurnModal, setShowChurnModal] = useState(false);
+  const [showEditModal, setShowEditModal]   = useState(false);
 
   const { financials, loading: finLoading, load: loadFin, upsert: saveFin, saving: savingFin, summary } =
     useClientFinancials(clientId);
@@ -1049,12 +1050,23 @@ function ClientDetailSidebar({
             </>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mt-0.5"
-        >
-          <X size={13} />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+          {detail && !loading && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
+              title="Editar dados do cliente"
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={13} />
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -1716,6 +1728,22 @@ function ClientDetailSidebar({
         </>
       ) : null}
 
+      {/* Edit client modal */}
+      <AnimatePresence>
+        {showEditModal && detail && (
+          <EditClientModal
+            client={detail}
+            onSave={async (data) => {
+              await onUpdateClient(data);
+              const updated = await loadDetail(clientId);
+              setDetail(updated);
+              setShowEditModal(false);
+            }}
+            onClose={() => setShowEditModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Churn modal — rendered inside sidebar context */}
       <AnimatePresence>
         {showChurnModal && detail && (
@@ -2061,6 +2089,243 @@ function ProductCategoryPicker({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Edit Client Modal ────────────────────────────────────────────────────────
+
+function EditClientModal({
+  client, onSave, onClose,
+}: {
+  client: Client;
+  onSave: (data: Partial<Client>) => Promise<void>;
+  onClose: () => void;
+}) {
+  type EditTab = "empresa" | "contato" | "financeiro";
+  const [tab, setTab] = useState<EditTab>("empresa");
+  const [form, setForm] = useState<Partial<Client>>({
+    name:                   client.name,
+    cnpj:                   client.cnpj ?? "",
+    razao_social:           client.razao_social ?? "",
+    cidade:                 client.cidade ?? "",
+    estado:                 client.estado ?? "",
+    segment:                client.segment ?? "",
+    operation_start_date:   client.operation_start_date ?? "",
+    main_product:           client.main_product ?? "",
+    team_name:              client.team_name ?? "",
+    contact_name:           client.contact_name ?? "",
+    cargo:                  client.cargo ?? "",
+    contact_email:          client.contact_email ?? "",
+    telefone:               client.telefone ?? "",
+    responsavel_financeiro: client.responsavel_financeiro ?? "",
+    cargo_responsavel:      client.cargo_responsavel ?? "",
+    email_faturamento:      client.email_faturamento ?? "",
+    mrr:                    client.mrr ?? 0,
+    nps:                    client.nps ?? null,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+
+  function setF<K extends keyof Client>(key: K, value: Client[K] | string | number | null) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handleSave() {
+    if (!form.name?.trim()) { setTab("empresa"); setError("Nome da empresa é obrigatório"); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({ id: client.id, ...form });
+    } catch (e) {
+      setError((e as Error).message ?? "Erro ao salvar");
+      setSaving(false);
+    }
+  }
+
+  const inp = "glass w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/40";
+  const lbl = "text-xs text-muted-foreground mb-1 block";
+
+  const editTabs: { id: EditTab; label: string }[] = [
+    { id: "empresa",    label: "Empresa" },
+    { id: "contato",    label: "Contato" },
+    { id: "financeiro", label: "Financeiro" },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        className="glass-strong rounded-2xl border border-border w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-border/40 flex-shrink-0">
+          <div>
+            <h3 className="font-semibold text-sm">Editar cliente</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{client.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-5 pt-3 pb-1 flex-shrink-0">
+          {editTabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${tab === t.id ? "bg-secondary text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+          {error && (
+            <div className="text-xs text-red-400 bg-red-500/10 rounded-xl px-3 py-2">{error}</div>
+          )}
+
+          {tab === "empresa" && (
+            <>
+              <div>
+                <label className={lbl}>Nome da empresa *</label>
+                <input value={form.name ?? ""} onChange={(e) => setF("name", e.target.value)} className={inp} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>CNPJ</label>
+                  <input value={form.cnpj ?? ""} onChange={(e) => setF("cnpj", e.target.value)} placeholder="00.000.000/0001-00" className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Razão Social</label>
+                  <input value={form.razao_social ?? ""} onChange={(e) => setF("razao_social", e.target.value)} className={inp} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Cidade</label>
+                  <input value={form.cidade ?? ""} onChange={(e) => setF("cidade", e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Estado</label>
+                  <input value={form.estado ?? ""} onChange={(e) => setF("estado", e.target.value)} placeholder="SP" className={inp} />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Segmento</label>
+                <input value={form.segment ?? ""} onChange={(e) => setF("segment", e.target.value)} placeholder="Ex: Saúde, Educação" className={inp} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Produto principal</label>
+                  <input value={form.main_product ?? ""} onChange={(e) => setF("main_product", e.target.value)} placeholder="Ex: DR-X" className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Time responsável</label>
+                  <input value={form.team_name ?? ""} onChange={(e) => setF("team_name", e.target.value)} placeholder="Nome do squad" className={inp} />
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Data de início da operação</label>
+                <input type="date" value={form.operation_start_date ?? ""} onChange={(e) => setF("operation_start_date", e.target.value)} className={inp} />
+              </div>
+            </>
+          )}
+
+          {tab === "contato" && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Nome do contato</label>
+                  <input value={form.contact_name ?? ""} onChange={(e) => setF("contact_name", e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>Cargo</label>
+                  <input value={form.cargo ?? ""} onChange={(e) => setF("cargo", e.target.value)} placeholder="CEO, Diretor..." className={inp} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>E-mail</label>
+                  <input type="email" value={form.contact_email ?? ""} onChange={(e) => setF("contact_email", e.target.value)} className={inp} />
+                </div>
+                <div>
+                  <label className={lbl}>WhatsApp / Telefone</label>
+                  <input value={form.telefone ?? ""} onChange={(e) => setF("telefone", e.target.value)} placeholder="(11) 99999-9999" className={inp} />
+                </div>
+              </div>
+              <div className="pt-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Responsável Financeiro</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={lbl}>Nome</label>
+                    <input value={form.responsavel_financeiro ?? ""} onChange={(e) => setF("responsavel_financeiro", e.target.value)} className={inp} />
+                  </div>
+                  <div>
+                    <label className={lbl}>Cargo</label>
+                    <input value={form.cargo_responsavel ?? ""} onChange={(e) => setF("cargo_responsavel", e.target.value)} className={inp} />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className={lbl}>E-mail de faturamento</label>
+                  <input type="email" value={form.email_faturamento ?? ""} onChange={(e) => setF("email_faturamento", e.target.value)} className={inp} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === "financeiro" && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>MRR (R$)</label>
+                  <input
+                    type="number"
+                    value={form.mrr ?? ""}
+                    onChange={(e) => setF("mrr", parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                    className={inp}
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>NPS</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={form.nps ?? ""}
+                    onChange={(e) => setF("nps", e.target.value === "" ? null : parseInt(e.target.value, 10))}
+                    placeholder="0–10"
+                    className={inp}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-5 pb-5 pt-3 border-t border-border/30 flex-shrink-0">
+          <button onClick={onClose} className="text-xs px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="text-xs px-4 py-2 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Salvar alterações"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

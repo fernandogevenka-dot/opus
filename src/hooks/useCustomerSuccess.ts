@@ -336,11 +336,27 @@ export function useCustomerSuccess() {
     // Sempre recalcular o journey_stage a partir da operation_start_date
     const journeyStage = calcJourneyStage(data.operation_start_date);
 
+    // Colunas que ainda não existem no banco — remover de qualquer operação
+    const MISSING_COLUMNS = [
+      "main_product",
+      "team_name",
+      "situation_color",
+      "cargo_responsavel",
+      "ultimo_pagamento_date",
+      "ultimo_pagamento_valor",
+      "contrato_url",
+      "roi_url",
+      "sales_call_url",
+    ] as const;
+
     if (data.id) {
+      const cleanUpdate = { ...(data as Record<string, unknown>) };
+      for (const col of MISSING_COLUMNS) delete cleanUpdate[col];
+
       const { data: updated, error } = await supabase
         .from("clients")
         .update({
-          ...data,
+          ...cleanUpdate,
           journey_stage: journeyStage,
           updated_at: new Date().toISOString(),
         })
@@ -354,20 +370,6 @@ export function useCustomerSuccess() {
       loadClients().catch((e) => console.warn("loadClients after update failed:", e));
       return updated;
     } else {
-      // Remover campos que o frontend usa mas ainda não existem na tabela do banco.
-      // NOTA: journey_stage e operation_start_date JÁ EXISTEM no banco — não remover.
-      // Rode o SQL em supabase para adicionar as colunas que ainda não existem.
-      const MISSING_COLUMNS = [
-        "main_product",
-        "team_name",
-        "situation_color",
-        "cargo_responsavel",
-        "ultimo_pagamento_date",
-        "ultimo_pagamento_valor",
-        "contrato_url",
-        "roi_url",
-        "sales_call_url",
-      ] as const;
       const cleanData = { ...(data as Record<string, unknown>) };
       for (const col of MISSING_COLUMNS) delete cleanData[col];
 
