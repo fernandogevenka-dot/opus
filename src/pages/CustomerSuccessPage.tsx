@@ -418,7 +418,6 @@ function QuickFiltersPanel({
   onChange: (f: ActiveFilters) => void;
   clients: Client[];
 }) {
-  const [safraMode, setSafraMode] = useState<"all" | "range">("all");
   const teams = [...new Set(clients.map((c) => c.team_name).filter(Boolean))] as string[];
 
   // Metrics computed from the same filter logic as the main page
@@ -464,8 +463,6 @@ function QuickFiltersPanel({
 
   const hasRangeActive = !!(filters.cohortFrom || filters.cohortTo);
 
-  // Safra: valor do select — "" = todo período, "range" = modo calendário, "YYYY-MM" = mês exato
-  const safraSelectValue = safraMode === "range" ? "__range__" : (filters.cohortFrom || filters.cohortTo ? "__range__" : "");
   const safras = [...new Set(
     clients.map((c) => c.operation_start_date?.slice(0, 7)).filter(Boolean)
   )].sort() as string[];
@@ -516,55 +513,37 @@ function QuickFiltersPanel({
 
         {/* Safra */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground px-1">Safra</label>
-          {safraMode === "range" ? (
-            /* Modo calendário: dois month inputs lado a lado dentro da caixinha */
-            <div className="rounded-2xl border border-primary/40 bg-background shadow-sm px-3 h-11 flex items-center gap-2">
-              <Calendar size={13} className="text-muted-foreground flex-shrink-0" />
-              <input
-                type="month"
-                value={filters.cohortFrom}
-                onChange={(e) => onChange({ ...filters, cohortFrom: e.target.value })}
-                className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none cursor-pointer"
-              />
-              <span className="text-xs text-muted-foreground flex-shrink-0">até</span>
-              <input
-                type="month"
-                value={filters.cohortTo}
-                onChange={(e) => onChange({ ...filters, cohortTo: e.target.value })}
-                className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none cursor-pointer"
-              />
+          <label className="text-xs font-medium text-muted-foreground px-1">
+            Safra
+            {(filters.cohortFrom || filters.cohortTo) && (
               <button
-                onClick={() => { setSafraMode("all"); clearSafra(); }}
-                className="flex-shrink-0 text-muted-foreground/50 hover:text-foreground transition-colors"
+                onClick={clearSafra}
+                className="ml-2 text-[10px] text-primary hover:underline font-normal"
               >
-                <X size={12} />
+                limpar
               </button>
-            </div>
-          ) : (
-            <div className="relative">
-              <select
-                value={safraSelectValue}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "__range__") {
-                    setSafraMode("range");
-                  } else {
-                    setSafraMode("all");
-                    onChange({ ...filters, cohortFrom: val === "" ? "" : val, cohortTo: val === "" ? "" : val, cohortMonth: val === "" ? "" : val });
-                  }
-                }}
-                className={selectCls}
-              >
-                <option value="">Todo o período</option>
-                <option value="__range__">📅 Escolher período...</option>
-                {safras.map((s) => (
-                  <option key={s} value={s}>{formatSafra(s)}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            </div>
-          )}
+            )}
+          </label>
+          <div className={`rounded-2xl border bg-background shadow-sm px-3 h-11 flex items-center gap-2 transition-colors ${
+            (filters.cohortFrom || filters.cohortTo) ? "border-primary/40" : "border-border/50"
+          }`}>
+            <Calendar size={13} className="text-muted-foreground flex-shrink-0" />
+            <input
+              type="month"
+              value={filters.cohortFrom}
+              onChange={(e) => onChange({ ...filters, cohortFrom: e.target.value, cohortMonth: "" })}
+              placeholder="Início"
+              className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none cursor-pointer text-foreground"
+            />
+            <span className="text-xs text-muted-foreground flex-shrink-0">—</span>
+            <input
+              type="month"
+              value={filters.cohortTo}
+              onChange={(e) => onChange({ ...filters, cohortTo: e.target.value, cohortMonth: "" })}
+              placeholder="Fim"
+              className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none cursor-pointer text-foreground"
+            />
+          </div>
         </div>
 
         {/* Clientes */}
