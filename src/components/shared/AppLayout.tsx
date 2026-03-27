@@ -11,7 +11,7 @@ import {
   LayoutGrid, LogOut, User, Bell, Zap, HeartHandshake,
   Settings2, Armchair, ChevronDown, Users, MessageCircle,
   Briefcase, Shield, UserCheck, ClipboardList, Package,
-  ShieldCheck,
+  ShieldCheck, Lightbulb,
 } from "lucide-react";
 import { getStatusColor, getLevelName, getXPForNextLevel, formatXP } from "@/lib/utils";
 import { KnockNotificationBanner } from "@/components/shared/KnockNotificationBanner";
@@ -59,10 +59,11 @@ const ALL_NAV_GROUPS: NavGroup[] = [
   {
     label: "Ferramentas",
     items: [
-      { id: "ai",        label: AI_NAME,                  icon: <Sparkles size={15} /> },
-      { id: "wiki",      label: "Base de Conhecimento",   icon: <BookOpen size={15} /> },
-      { id: "meetings",  label: "Reuniões",               icon: <Video size={15} /> },
-      { id: "workspace", label: "Workspace",              icon: <LayoutGrid size={15} /> },
+      { id: "ai",               label: AI_NAME,                  icon: <Sparkles size={15} /> },
+      { id: "wiki",             label: "Base de Conhecimento",   icon: <BookOpen size={15} /> },
+      { id: "meetings",         label: "Reuniões",               icon: <Video size={15} /> },
+      { id: "workspace",        label: "Workspace",              icon: <LayoutGrid size={15} /> },
+      { id: "feature-requests", label: "Melhorias",              icon: <Lightbulb size={15} /> },
     ],
   },
   {

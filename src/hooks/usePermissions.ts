@@ -98,6 +98,7 @@ export function usePermissions(): Permissions {
       case "workspace":
       case "checkins":
       case "desk-customize":
+      case "feature-requests":
         return true;
       // Depende de permissões
       case "cs":             return true; // todos veem (filtragem é na página)

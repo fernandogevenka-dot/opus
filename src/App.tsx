@@ -21,6 +21,7 @@ import { SquadsPage } from "@/pages/SquadsPage";
 import { CollaboratorsPage } from "@/pages/CollaboratorsPage";
 import { CheckinsPage } from "@/pages/CheckinsPage";
 import { UserApprovalPage } from "@/pages/UserApprovalPage";
+import { FeatureRequestsPage } from "@/pages/FeatureRequestsPage";
 
 function LoadingScreen() {
   return (
@@ -57,6 +58,7 @@ function PageRouter() {
     case "collaborators":    return <CollaboratorsPage />;
     case "checkins":         return <CheckinsPage />;
     case "user-approval":    return <UserApprovalPage />;
+    case "feature-requests": return <FeatureRequestsPage />;
     default:                 return <OfficePage />;
   }
 }
