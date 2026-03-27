@@ -114,8 +114,12 @@ export function useCollaborators() {
   }, [user, loadCollaborators]);
 
   const saveCollaborator = useCallback(async (data: CollaboratorFormData, id?: string) => {
+    // Remover campos que não são colunas da tabela (joins, campos calculados)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { squads: _squads, ...cleanData } = data as CollaboratorFormData & { squads?: unknown };
+
     const payload = {
-      ...data,
+      ...cleanData,
       updated_at: new Date().toISOString(),
     };
 
