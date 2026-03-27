@@ -1033,14 +1033,6 @@ function ClientDetailSidebar({
                     {getJourneyLabel(detail.journey_stage)}
                   </span>
                 )}
-                {detail?.situation_color && (
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                    style={{ color: sit.color, backgroundColor: sit.bg }}
-                  >
-                    {sit.label}
-                  </span>
-                )}
                 {detail?.main_product && (
                   <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                     <Package size={9} />
@@ -1317,29 +1309,6 @@ function ClientDetailSidebar({
                   );
                 })()}
 
-                {/* Situation + product + team quick-edit */}
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Configuração</p>
-
-                  {/* Product — inline category picker */}
-                  <ProductInlinePicker
-                    value={detail.main_product ?? ""}
-                    onSave={(v) => {
-                      onUpdateClient({ id: detail.id, main_product: v });
-                      setDetail({ ...detail, main_product: v });
-                    }}
-                  />
-                  <InlineField
-                    label="Time"
-                    icon={<UserCheck size={10} />}
-                    value={detail.team_name ?? ""}
-                    onSave={(v) => {
-                      onUpdateClient({ id: detail.id, team_name: v });
-                      setDetail({ ...detail, team_name: v });
-                    }}
-                  />
-                </div>
-
                 {/* Contact */}
                 {(detail.contact_name || detail.contact_email || detail.contact_phone) && (
                   <div className="space-y-1.5">
@@ -1592,30 +1561,7 @@ function ClientDetailSidebar({
                     ? financials.reduce((s, f) => s + (f.cac ?? 0), 0)
                     : 0;
 
-                  // Custo de servir: financials ou estimativa pela margem bruta dos projetos
-                  const custoServir = hasFinancials
-                    ? financials.reduce((s, f) => s + (f.cost_to_serve ?? 0), 0)
-                    : (() => {
-                        // Usa margem_bruta do projeto se disponível, senão aplica margem padrão
-                        const custoRecorrente = projAtivos.reduce((s, p) => {
-                          const meses = p.start_date
-                            ? Math.max(1, Math.round((new Date().getTime() - new Date(p.start_date).getTime()) / (30.44 * 86_400_000)))
-                            : 1;
-                          const receita = (p.mrr ?? 0) * meses;
-                          const margem = p.margem_bruta != null ? p.margem_bruta / 100 : getProductMargin(undefined);
-                          return s + receita * (1 - margem);
-                        }, 0);
-                        const custoOnetime = projEncerrados.reduce((s, p) => {
-                          // One-time: mrr já é o valor total, não multiplica por meses
-                          const receita = p.mrr ?? 0;
-                          const margem = p.margem_bruta != null ? p.margem_bruta / 100 : getProductMargin(undefined);
-                          return s + receita * (1 - margem);
-                        }, 0);
-                        return custoRecorrente + custoOnetime;
-                      })();
-
-                  const margemBruta = receitaBruta - custoServir;
-                  const margemLiquida = margemBruta - cacTotal;
+                  const margemLiquida = receitaBruta - cacTotal;
                   const margemPct = receitaBruta > 0 ? (margemLiquida / receitaBruta) * 100 : 0;
                   const isPositive = margemLiquida >= 0;
                   const hasProjects = allProjects.length > 0;
@@ -1652,19 +1598,8 @@ function ClientDetailSidebar({
                             </p>
                           )}
                         </div>
-                        <div className="bg-background/80 px-4 py-3">
-                          <p className="text-[10px] text-muted-foreground">Custo de servir acum.</p>
-                          <p className="text-lg font-bold tracking-tight mt-0.5 text-red-400">{formatCurrency(custoServir)}</p>
-                          {!hasFinancials && <p className="text-[9px] text-muted-foreground/50 mt-0.5">estimativa</p>}
-                        </div>
-                        <div className="bg-background/80 px-4 py-3">
-                          <p className="text-[10px] text-muted-foreground">CAC investido</p>
-                          <p className="text-lg font-bold tracking-tight mt-0.5 text-amber-400">
-                            {cacTotal > 0 ? formatCurrency(cacTotal) : <span className="text-muted-foreground/40 text-sm">não registrado</span>}
-                          </p>
-                        </div>
                         <div className="bg-background/80 px-4 py-3 border border-transparent" style={{ borderColor: isPositive ? "#22c55e30" : "#ef444430", borderWidth: 1 }}>
-                          <p className="text-[10px] text-muted-foreground">Margem líquida</p>
+                          <p className="text-[10px] text-muted-foreground">Receita líquida</p>
                           <p className="text-lg font-bold tracking-tight mt-0.5" style={{ color: isPositive ? "#22c55e" : "#ef4444" }}>
                             {formatCurrency(margemLiquida)}
                           </p>
