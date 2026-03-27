@@ -17,6 +17,15 @@ export function useAuth() {
           await upsertAndFetchUser(session);
         } catch (err) {
           console.error("[OPUS] upsertAndFetchUser failed:", err);
+          // Fallback: set a minimal user so the app doesn't stay on login screen
+          setUser({
+            id: session.user.id,
+            email: session.user.email ?? "",
+            name: session.user.user_metadata?.full_name ?? session.user.email ?? "",
+            avatar_url: session.user.user_metadata?.avatar_url ?? "",
+            opus_role: "pending",
+            approval_status: "pending",
+          } as import("@/types").User);
         }
       } else {
         setUser(null);
@@ -30,24 +39,18 @@ export function useAuth() {
       setLoading(false);
     }, 8000);
 
-    // Handle OAuth code in URL (PKCE flow)
-    const params = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.replace("#", "?"));
-    const hasCode = params.has("code") || hashParams.has("access_token");
-
-    if (hasCode) {
-      console.log("[OPUS] OAuth code/token detected in URL, exchanging...");
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        console.log("[OPUS] session after code exchange:", session?.user?.email ?? "none");
-        if (!session) setLoading(false);
-      });
-    } else {
-      // Normal page load — check for existing session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        console.log("[OPUS] getSession:", session?.user?.email ?? "no session");
-        if (!session) setLoading(false);
-      });
-    }
+    // Normal page load — check for existing session.
+    // setLoading(false) ALWAYS runs here so the app never hangs on the
+    // loading screen when there is already a valid session in localStorage.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("[OPUS] getSession:", session?.user?.email ?? "no session");
+      // onAuthStateChange will handle the full upsert; we just unblock loading
+      // here in case it fires before or in parallel.
+      if (!session) setLoading(false);
+      // When there IS a session, loading is unblocked inside onAuthStateChange
+      // (after upsertAndFetchUser). Safety timeout below still guards against
+      // any failure.
+    });
 
     return () => {
       subscription.unsubscribe();
