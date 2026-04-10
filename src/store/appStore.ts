@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type AppPage = "office" | "feed" | "ai" | "wiki" | "cs" | "meetings" | "workspace" | "office-settings" | "desk-customize" | "profile" | "wa-cs" | "projects" | "products" | "squads" | "collaborators" | "checkins" | "user-approval" | "feature-requests";
+export type AppPage = "office" | "feed" | "ai" | "wiki" | "cs" | "meetings" | "workspace" | "office-settings" | "desk-customize" | "profile" | "wa-cs" | "projects" | "products" | "squads" | "collaborators" | "checkins" | "user-approval" | "feature-requests" | "gtm-cockpit";
 
 interface AppState {
   currentPage: AppPage;

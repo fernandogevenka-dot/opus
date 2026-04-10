@@ -71,6 +71,7 @@ const ALL_NAV: NavItem[] = [
   { id: "office-settings",label: "Configurações",        icon: "Settings",     section: "admin" },
   { id: "desk-customize",    label: "Minha Mesa",        icon: "Armchair",     section: "admin" },
   { id: "feature-requests",  label: "Melhorias",         icon: "Lightbulb",    section: "main"  },
+  { id: "gtm-cockpit",       label: "GTM Cockpit",        icon: "Activity",     section: "work"  },
 ];
 
 export function usePermissions(): Permissions {
@@ -100,6 +101,7 @@ export function usePermissions(): Permissions {
       case "checkins":
       case "desk-customize":
       case "feature-requests":
+      case "gtm-cockpit":
         return true;
       // Depende de permissões
       case "cs":             return true; // todos veem (filtragem é na página)
