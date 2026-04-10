@@ -2135,11 +2135,58 @@ export function ProjectsPage() {
       {/* ── Projects Tab ── */}
       {pageTab === "projects" && <>
 
+      {/* ── Sub-abas STEP ── */}
+      <div className="flex-shrink-0 flex items-center gap-2">
+        {/* "Todos" pill */}
+        <button
+          onClick={() => setFilterSetor("")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+            filterSetor === ""
+              ? "bg-foreground/10 border-foreground/20 text-foreground"
+              : "border-border/40 text-muted-foreground hover:text-foreground hover:border-border/80"
+          }`}
+        >
+          Todos
+          <span className="ml-0.5 opacity-60 text-[10px]">
+            ({projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length})
+          </span>
+        </button>
+
+        {/* Saber, Ter, Executar */}
+        {(["saber", "ter", "executar"] as const).map((sid) => {
+          const s = SETORES.find((x) => x.id === sid)!;
+          const count = projects.filter((p) => {
+            const setor = getProjectSetor(p);
+            if (!setor && sid === "executar" && (p.mrr ?? 0) > 0) return true;
+            return setor === sid;
+          }).length;
+          const isActive = filterSetor === sid;
+          return (
+            <button
+              key={sid}
+              onClick={() => setFilterSetor(isActive ? "" : sid)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                isActive
+                  ? "border-transparent text-white shadow-sm"
+                  : "border-border/40 text-muted-foreground hover:text-foreground hover:border-border/80"
+              }`}
+              style={isActive ? { backgroundColor: s.color } : undefined}
+            >
+              <span>{s.icon}</span>
+              {s.label}
+              <span className={`ml-0.5 text-[10px] ${isActive ? "opacity-80" : "opacity-60"}`}>
+                ({count})
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Filtros em grade (padrão CS) ── */}
       <div className="flex-shrink-0 flex flex-col gap-3">
 
         {/* 4 selects com label */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 items-end">
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 items-end">
 
           {/* Squad */}
           <div className="flex flex-col gap-1.5">
@@ -2170,22 +2217,6 @@ export function ProjectsPage() {
                 {MOMENTO_LABELS.map((m) => (
                   <option key={m} value={m}>{m} ({projects.filter((p) => p.momento === m).length})</option>
                 ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Setor */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground px-1">Setor</label>
-            <div className="relative">
-              <select
-                value={filterSetor}
-                onChange={(e) => setFilterSetor(e.target.value as SetorId | "")}
-                className="h-11 px-4 rounded-2xl border border-border/50 bg-background shadow-sm text-sm text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all pr-9 w-full"
-              >
-                <option value="">Todos os setores</option>
-                {SETORES.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
