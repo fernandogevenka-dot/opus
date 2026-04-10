@@ -4,13 +4,14 @@ import type { ClientInteraction } from "@/types";
 import {
   DollarSign, Star, FileText, Upload, Plus, Package,
   MessageSquare, Phone, Mail, RefreshCw, Sparkles, BookOpen,
-  Clock, TrendingUp, ChevronRight, CheckCircle, AlertCircle
+  Clock, TrendingUp, ChevronRight, CheckCircle, AlertCircle, Target
 } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { AI_NAME } from "@/lib/constants";
+import { PICPanel } from "@/components/cs/PICPanel";
 
-type DetailTab = "overview" | "timeline" | "products" | "surveys" | "contracts";
+type DetailTab = "overview" | "timeline" | "products" | "surveys" | "contracts" | "pic";
 
 const INTERACTION_ICONS: Record<string, string> = {
   meeting: "📋", email: "📧", call: "📞", delivery: "✅",
@@ -91,6 +92,7 @@ export function ClientDetailPanel({ client, onAddInteraction, onUploadContract, 
       <div className="flex gap-1 mb-3 flex-shrink-0">
         {([
           { id: "overview", label: "Visão Geral", icon: <TrendingUp size={13} /> },
+          { id: "pic", label: "PIC", icon: <Target size={13} /> },
           { id: "timeline", label: "Timeline", icon: <Clock size={13} /> },
           { id: "products", label: `Produtos (${client.contracted_products.length})`, icon: <Package size={13} /> },
           { id: "surveys", label: `Pesquisas (${client.surveys.length})`, icon: <Star size={13} /> },
@@ -326,6 +328,13 @@ export function ClientDetailPanel({ client, onAddInteraction, onUploadContract, 
                 <SurveyCard key={survey.id} survey={survey} />
               ))
             )}
+          </div>
+        )}
+
+        {/* PIC */}
+        {activeTab === "pic" && (
+          <div className="py-1">
+            <PICPanel clientId={client.id} clientName={client.name} />
           </div>
         )}
 

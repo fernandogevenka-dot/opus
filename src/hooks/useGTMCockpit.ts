@@ -178,12 +178,25 @@ export interface ClientHealthScore {
     situacao: number;
     financeiro: number;
     nps: number;
-    qualidade: number;
+    qualidade: number;   // combina risco de projeto + score PIC
     expansao: number;
   };
+  picScore: number | null;  // último score_entrega do PIC (0-10), null se não há histórico
 }
 
-function calcHealthScore(client: Client, projects: Project[]): ClientHealthScore {
+// Minimal PIC row shape needed for cockpit
+interface PICRow {
+  client_id: string;
+  score_entrega: number | null;
+  status: string;
+  cycle_number: number;
+}
+
+function calcHealthScore(
+  client: Client,
+  projects: Project[],
+  latestPIC: PICRow | null
+): ClientHealthScore {
   const clientProjects = projects.filter(
     (p) =>
       p.client_id === client.id &&
@@ -218,12 +231,19 @@ function calcHealthScore(client: Client, projects: Project[]): ClientHealthScore
     else nps = 0;
   }
 
-  // Qualidade de entrega (via risco do projeto) — 15%
-  const riscos = clientProjects.map((p) => p.risco?.toLowerCase() ?? "");
-  let qualidade = 80;
-  if (riscos.some((r) => r.includes("alto") || r.includes("crítico"))) qualidade = 20;
-  else if (riscos.some((r) => r.includes("médio") || r.includes("medio"))) qualidade = 55;
-  else if (clientProjects.length > 0) qualidade = 90;
+  // Qualidade de entrega — 15%
+  // Usa score PIC (0-10 → 0-100) se disponível; senão usa risco de projeto
+  let qualidade: number;
+  const picScore = latestPIC?.score_entrega ?? null;
+  if (picScore !== null) {
+    qualidade = Math.round((picScore / 10) * 100);
+  } else {
+    const riscos = clientProjects.map((p) => p.risco?.toLowerCase() ?? "");
+    qualidade = 80;
+    if (riscos.some((r) => r.includes("alto") || r.includes("crítico"))) qualidade = 20;
+    else if (riscos.some((r) => r.includes("médio") || r.includes("medio"))) qualidade = 55;
+    else if (clientProjects.length > 0) qualidade = 90;
+  }
 
   // Potencial de expansão (status) — 15%
   const expansaoMap: Record<string, number> = {
@@ -254,6 +274,7 @@ function calcHealthScore(client: Client, projects: Project[]): ClientHealthScore
     modal: getTierModal(tier),
     mrr,
     status,
+    picScore,
     dimensions: { situacao, financeiro, nps, qualidade, expansao },
   };
 }
@@ -349,8 +370,10 @@ function identificarGargalo(
 export function useGTMCockpit() {
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [picCycles, setPicCycles] = useState<PICRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingPIC, setLoadingPIC] = useState(true);
   const { products, loading: loadingProducts } = useProducts();
 
   useEffect(() => {
@@ -373,7 +396,19 @@ export function useGTMCockpit() {
       });
   }, []);
 
-  const loading = loadingClients || loadingProjects || loadingProducts;
+  useEffect(() => {
+    supabase
+      .from("pic_cycles")
+      .select("client_id, score_entrega, status, cycle_number")
+      .eq("status", "completed")
+      .order("cycle_number", { ascending: false })
+      .then(({ data }) => {
+        if (data) setPicCycles(data as PICRow[]);
+        setLoadingPIC(false);
+      });
+  }, []);
+
+  const loading = loadingClients || loadingProjects || loadingProducts || loadingPIC;
 
   const result = useMemo(() => {
     if (!clients.length && !projects.length) return null;
@@ -418,9 +453,17 @@ export function useGTMCockpit() {
         ? (churnedThisMonth.length / (activeClients.length + churnedThisMonth.length)) * 100
         : 0;
 
+    // Latest completed PIC per client (already ordered by cycle_number desc)
+    const latestPICByClient = new Map<string, PICRow>();
+    for (const row of picCycles) {
+      if (!latestPICByClient.has(row.client_id)) {
+        latestPICByClient.set(row.client_id, row);
+      }
+    }
+
     // Health Scores
     const healthScores: ClientHealthScore[] = activeClients
-      .map((c) => calcHealthScore(c, projects))
+      .map((c) => calcHealthScore(c, projects, latestPICByClient.get(c.id) ?? null))
       .sort((a, b) => a.score - b.score); // pior primeiro
 
     // Distribuição por tier
