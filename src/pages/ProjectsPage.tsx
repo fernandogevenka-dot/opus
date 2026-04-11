@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useAppStore } from "@/store/appStore";
 import {
   useProjects,
   MOMENTO_LABELS,
@@ -1954,6 +1955,9 @@ export function ProjectsPage() {
   const clients = useClientOptions();
   const squads = useSquadOptions();
 
+  // Sync filterSetor with sidebar store
+  const { projectsSetor, setProjectsSetor } = useAppStore();
+
   // Page tab
   const [pageTab, setPageTab] = useState<PageTab>("projects");
 
@@ -1962,7 +1966,10 @@ export function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [filterMomento, setFilterMomento] = useState<string>("");
   const [filterSquad, setFilterSquad] = useState<string>("");
-  const [filterSetor, setFilterSetor] = useState<SetorId | "">("");
+
+  // filterSetor is driven by sidebar; local pills also write to the store
+  const filterSetor = projectsSetor as SetorId | "";
+  const setFilterSetor = (val: SetorId | "") => setProjectsSetor(val as import("@/store/appStore").ProjectsSetor);
 
   // Modal state
   const [detailProject, setDetailProject] = useState<Project | null>(null);

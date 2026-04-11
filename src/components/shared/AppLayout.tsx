@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAppStore, type AppPage } from "@/store/appStore";
+import { useAppStore, type AppPage, type ProjectsSetor } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 import { useGamification } from "@/hooks/useGamification";
 import { useOfficeStore } from "@/store/officeStore";
@@ -11,7 +11,7 @@ import {
   LayoutGrid, LogOut, User, Bell, Zap, HeartHandshake,
   Settings2, Armchair, ChevronDown, Users, MessageCircle,
   Briefcase, Shield, UserCheck, ClipboardList, Package,
-  ShieldCheck, Lightbulb, Activity,
+  ShieldCheck, Lightbulb, Activity, GraduationCap, Box, Settings,
 } from "lucide-react";
 import { getStatusColor, getLevelName, getXPForNextLevel, formatXP } from "@/lib/utils";
 import { KnockNotificationBanner } from "@/components/shared/KnockNotificationBanner";
@@ -81,8 +81,14 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+const STEP_SUB_ITEMS: { id: ProjectsSetor; label: string; icon: React.ReactNode; color: string }[] = [
+  { id: "saber",    label: "Saber",    icon: <GraduationCap size={12} />, color: "#8b5cf6" },
+  { id: "ter",      label: "Ter",      icon: <Box size={12} />,           color: "#06b6d4" },
+  { id: "executar", label: "Executar", icon: <Settings size={12} />,      color: "#22c55e" },
+];
+
 export function AppLayout({ children }: AppLayoutProps) {
-  const { currentPage, setCurrentPage, knockNotification, setKnockNotification } = useAppStore();
+  const { currentPage, setCurrentPage, knockNotification, setKnockNotification, projectsSetor, setProjectsSetor } = useAppStore();
   const { user, signOut } = useAuthStore();
   const { leaderboard } = useGamification();
   const presences = useOfficeStore((s) => s.presences);
@@ -192,32 +198,72 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <div className="space-y-0.5">
                   {groupItems.map((item) => {
                     const isActive = currentPage === item.id;
+                    const showSub = item.id === "projects" && (isActive || projectsSetor !== "");
                     return (
-                      <button
-                        key={item.id}
-                        onClick={() => setCurrentPage(item.id as AppPage)}
-                        className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all text-left ${
-                          isActive
-                            ? "bg-white/10 text-white"
-                            : "text-white/40 hover:text-white/80 hover:bg-white/5"
-                        }`}
-                      >
-                        {/* Active indicator */}
-                        {isActive && (
-                          <span
-                            className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-primary"
-                          />
-                        )}
-                        <span className={isActive ? "text-white" : "text-white/30"}>
-                          {item.icon}
-                        </span>
-                        <span className="flex-1">{item.label}</span>
-                        {"badge" in item && (item as NavItem).badge != null && (item as NavItem).badge! > 0 && (
-                          <span className="w-5 h-5 rounded-full bg-primary text-[10px] font-bold flex items-center justify-center text-white flex-shrink-0">
-                            {(item as NavItem).badge! > 9 ? "9+" : (item as NavItem).badge}
+                      <div key={item.id}>
+                        <button
+                          onClick={() => {
+                            setCurrentPage(item.id as AppPage);
+                            if (item.id !== "projects") setProjectsSetor("");
+                          }}
+                          className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all text-left ${
+                            isActive
+                              ? "bg-white/10 text-white"
+                              : "text-white/40 hover:text-white/80 hover:bg-white/5"
+                          }`}
+                        >
+                          {/* Active indicator */}
+                          {isActive && (
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-primary" />
+                          )}
+                          <span className={isActive ? "text-white" : "text-white/30"}>
+                            {item.icon}
                           </span>
+                          <span className="flex-1">{item.label}</span>
+                          {"badge" in item && (item as NavItem).badge != null && (item as NavItem).badge! > 0 && (
+                            <span className="w-5 h-5 rounded-full bg-primary text-[10px] font-bold flex items-center justify-center text-white flex-shrink-0">
+                              {(item as NavItem).badge! > 9 ? "9+" : (item as NavItem).badge}
+                            </span>
+                          )}
+                          {item.id === "projects" && (
+                            <ChevronDown
+                              size={12}
+                              className={`transition-transform text-white/30 ${isActive ? "rotate-0" : "-rotate-90"}`}
+                            />
+                          )}
+                        </button>
+
+                        {/* STEP sub-menu under Projetos */}
+                        {item.id === "projects" && isActive && (
+                          <div className="ml-4 mt-0.5 mb-1 pl-3 border-l border-white/10 space-y-0.5">
+                            {STEP_SUB_ITEMS.map((sub) => {
+                              const subActive = projectsSetor === sub.id;
+                              return (
+                                <button
+                                  key={sub.id}
+                                  onClick={() => setProjectsSetor(subActive ? "" : sub.id)}
+                                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-left ${
+                                    subActive
+                                      ? "bg-white/8 text-white"
+                                      : "text-white/35 hover:text-white/70 hover:bg-white/5"
+                                  }`}
+                                >
+                                  <span style={{ color: subActive ? sub.color : undefined }}>
+                                    {sub.icon}
+                                  </span>
+                                  <span className="flex-1">{sub.label}</span>
+                                  {subActive && (
+                                    <span
+                                      className="w-1 h-1 rounded-full flex-shrink-0"
+                                      style={{ backgroundColor: sub.color }}
+                                    />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
