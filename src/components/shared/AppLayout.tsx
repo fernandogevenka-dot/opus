@@ -11,7 +11,7 @@ import {
   LayoutGrid, LogOut, User, Bell, Zap, HeartHandshake,
   Settings2, Armchair, ChevronDown, Users, MessageCircle,
   Briefcase, Shield, UserCheck, ClipboardList, Package,
-  ShieldCheck, Lightbulb, Activity, GraduationCap, Box, Settings,
+  ShieldCheck, Lightbulb, Activity, GraduationCap, Box, Settings, CalendarDays,
 } from "lucide-react";
 import { getStatusColor, getLevelName, getXPForNextLevel, formatXP } from "@/lib/utils";
 import { KnockNotificationBanner } from "@/components/shared/KnockNotificationBanner";
@@ -43,6 +43,7 @@ const ALL_NAV_GROUPS: NavGroup[] = [
     label: "Operação",
     items: [
       { id: "gtm-cockpit",   label: "GTM Cockpit",        icon: <Activity size={15} /> },
+      { id: "mbr",           label: "MBR",                icon: <CalendarDays size={15} /> },
       { id: "cs",            label: "Clientes",           icon: <HeartHandshake size={15} /> },
       { id: "projects",      label: "Projetos",           icon: <Briefcase size={15} /> },
       { id: "products",      label: "Produtos",           icon: <Package size={15} /> },

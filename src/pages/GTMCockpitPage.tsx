@@ -5,6 +5,8 @@ import {
   Minus, ChevronRight, Activity,
 } from "lucide-react";
 import { useGTMCockpit, type ClientHealthScore, type MonthWaterfall } from "@/hooks/useGTMCockpit";
+import { ActionPlanPanel } from "@/components/cs/ActionPlanPanel";
+import type { GargaloTipo } from "@/hooks/useActionPlans";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtMRR(value: number): string {
@@ -490,6 +492,22 @@ export function GTMCockpitPage() {
               </div>
             </div>
           </div>
+        </motion.section>
+
+        {/* ── BLOCO 5: Planos de Ação ────────────────────────────────────── */}
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="rounded-2xl border border-border/50 bg-card p-5"
+        >
+          <ActionPlanPanel
+            defaultGargalo={gargalo.tipo !== "ok" ? (gargalo.tipo as GargaloTipo) : "manual"}
+            defaultProblema={gargalo.tipo !== "ok"
+              ? `${gargalo.metrica}: ${gargalo.valor} (benchmark ${gargalo.benchmark})`
+              : ""}
+            defaultAcao={gargalo.tipo !== "ok" ? gargalo.acao : ""}
+          />
         </motion.section>
 
         {/* Rodapé */}

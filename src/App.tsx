@@ -23,6 +23,7 @@ import { CheckinsPage } from "@/pages/CheckinsPage";
 import { UserApprovalPage } from "@/pages/UserApprovalPage";
 import { FeatureRequestsPage } from "@/pages/FeatureRequestsPage";
 import { GTMCockpitPage } from "@/pages/GTMCockpitPage";
+import { MBRPage } from "@/pages/MBRPage";
 
 function LoadingScreen() {
   return (
@@ -61,6 +62,7 @@ function PageRouter() {
     case "user-approval":    return <UserApprovalPage />;
     case "feature-requests": return <FeatureRequestsPage />;
     case "gtm-cockpit":      return <GTMCockpitPage />;
+    case "mbr":              return <MBRPage />;
     default:                 return <OfficePage />;
   }
 }
