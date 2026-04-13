@@ -260,8 +260,14 @@ function KanbanCard({ project, filterSetor, onClick, onEdit, onDelete }: KanbanC
   const projectSetor = getProjectSetor(project);
   const setorConfig = SETORES.find((s) => s.id === projectSetor);
 
-  // MRR
-  const mrr = project.mrr ?? 0;
+  // Métrica financeira principal — depende do setor ativo no filtro (ou do setor do projeto)
+  const activeSetor = filterSetor || projectSetor || "executar";
+  const metricValue = getSetorMetric(project, activeSetor as SetorId);
+  const metricLabel =
+    activeSetor === "saber" ? "EE" :
+    activeSetor === "ter" ? "Projeto" :
+    activeSetor === "potencializar" ? "Variável" :
+    "MRR";
 
   // LT — meses desde start_date
   const lt = (() => {
@@ -341,15 +347,15 @@ function KanbanCard({ project, filterSetor, onClick, onEdit, onDelete }: KanbanC
       {/* Spacer */}
       <div className="flex-1 min-h-[4px]" />
 
-      {/* Row 4: MRR grande + LT */}
+      {/* Row 4: métrica principal + LT */}
       <div className="flex items-end justify-between gap-2">
-        {mrr > 0 ? (
+        {metricValue > 0 ? (
           <span className="text-base font-bold text-green-600 dark:text-green-400 leading-none">
-            {formatMRR(mrr)}
-            <span className="text-[9px] font-normal text-muted-foreground ml-0.5">MRR</span>
+            {formatMRR(metricValue)}
+            <span className="text-[9px] font-normal text-muted-foreground ml-0.5">{metricLabel}</span>
           </span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/40">sem MRR</span>
+          <span className="text-[10px] text-muted-foreground/40">—</span>
         )}
         {lt && (
           <span className="text-[10px] text-muted-foreground/70 leading-none flex-shrink-0">
