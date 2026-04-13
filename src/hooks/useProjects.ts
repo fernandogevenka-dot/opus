@@ -200,13 +200,31 @@ export function useProjects() {
       updated_at: new Date().toISOString(),
     };
 
-    if (id) {
-      const { error: err } = await supabase.from("projects").update(payload).eq("id", id);
-      if (err) throw err;
-    } else {
-      const { error: err } = await supabase.from("projects").insert([payload]);
-      if (err) throw err;
+    async function tryUpdate(p: Record<string, unknown>) {
+      if (id) {
+        return supabase.from("projects").update(p).eq("id", id);
+      } else {
+        return supabase.from("projects").insert([p]);
+      }
     }
+
+    let { error: err } = await tryUpdate(payload);
+
+    // Se o erro for de coluna inexistente (contract_duration / desconto_total ainda não migrados),
+    // tenta novamente sem esses campos para não bloquear o usuário
+    if (err && (err.message?.includes("contract_duration") || err.message?.includes("desconto_total") || err.code === "PGRST204" || err.code === "42703")) {
+      console.warn("saveProject: coluna nova ausente no banco, salvando sem ela:", err.message);
+      const { contract_duration: _cd, desconto_total: _dt, ...payloadFallback } = payload as typeof payload & { contract_duration?: unknown; desconto_total?: unknown };
+      void _cd; void _dt;
+      const res2 = await tryUpdate(payloadFallback as Record<string, unknown>);
+      err = res2.error;
+    }
+
+    if (err) {
+      console.error("saveProject error:", err);
+      throw new Error(err.message || "Erro ao salvar projeto");
+    }
+
     await loadProjects();
   }, [loadProjects]);
 
