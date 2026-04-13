@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useCustomerSuccess } from "@/hooks/useCustomerSuccess";
 import type { ClientDetail, ClientProject } from "@/hooks/useCustomerSuccess";
 import { ACTIVE_MOMENTOS } from "@/hooks/useProjects";
@@ -3510,14 +3510,52 @@ function ClientRow({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── Dashboard de métricas ────────────────────────────────────────────────────
+
+function MetricCard({
+  label, value, sub, color = "#8b5cf6", icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  color?: string;
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="glass rounded-xl border border-border/30 px-4 py-3 flex items-center gap-3 min-w-0">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}18` }}>
+        <Icon size={15} style={{ color }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wide truncate">{label}</p>
+        <p className="text-lg font-bold leading-tight">{value}</p>
+        {sub && <p className="text-[10px] text-muted-foreground/60 truncate">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
 export function CustomerSuccessPage() {
   const cs = useCustomerSuccess();
   const { setCurrentPage, setProjectsClientFilter, setProjectsSetor } = useAppStore();
+  const { user } = useAuthStore();
 
   const [selectedId, setSelectedId]         = useState<string | null>(null);
   const [sidebarInitialTab, setSidebarInitialTab] = useState<DetailTab>("overview");
   const [showNewModal, setShowNewModal]      = useState(false);
   const [showCACModal, setShowCACModal]      = useState(false);
+
+  // Projetos ativos — buscamos o total para a métrica
+  const [totalActiveProjects, setTotalActiveProjects] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .in("momento", ACTIVE_MOMENTOS)
+      .then(({ count }) => setTotalActiveProjects(count ?? 0));
+  }, [user?.id]);
 
   // Filtros simplificados
   const [search, setSearch]                 = useState("");
@@ -3563,6 +3601,33 @@ export function CustomerSuccessPage() {
   const activeCount  = cs.clients.filter(isClientActive).length;
   const churnedCount = cs.clients.filter(isClientChurned).length;
 
+  // ── Métricas do dashboard ──────────────────────────────────────────────────
+  const now = new Date();
+  const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  // LT médio dos clientes ativos (em meses)
+  const ativos = cs.clients.filter(isClientActive);
+  const ltMedio = ativos.length > 0
+    ? Math.round(ativos.reduce((s, c) => s + ltMonths(c.journey_stage), 0) / ativos.length)
+    : 0;
+
+  // Novos contratos este mês — clientes com operation_start_date no mês atual
+  const novosEsteMes = cs.clients.filter(
+    (c) => c.operation_start_date?.slice(0, 7) === thisMonthPrefix
+  );
+  const novosQtd   = novosEsteMes.length;
+  const novosValor = novosEsteMes.reduce((s, c) => s + (c.mrr ?? 0), 0);
+
+  // Churn M0 — clientes marcados como financial_churn=true com churn_date ou operation_start_date neste mês
+  const churnM0 = cs.clients.filter(
+    (c) =>
+      c.financial_churn === true &&
+      (
+        c.churn_date?.slice(0, 7) === thisMonthPrefix ||
+        c.operation_start_date?.slice(0, 7) === thisMonthPrefix
+      )
+  ).length;
+
   function goToProjects(client: Client) {
     setProjectsClientFilter(client.id);
     setProjectsSetor("");
@@ -3571,6 +3636,52 @@ export function CustomerSuccessPage() {
 
   return (
     <div className="flex flex-col h-full gap-3">
+
+      {/* ── Dashboard de métricas ── */}
+      <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <MetricCard
+          label="Total Clientes"
+          value={cs.clients.length}
+          sub={`${activeCount} ativos`}
+          color="#8b5cf6"
+          icon={Users}
+        />
+        <MetricCard
+          label="Projetos Ativos"
+          value={totalActiveProjects === null ? "…" : totalActiveProjects}
+          sub="em andamento"
+          color="#06b6d4"
+          icon={Briefcase}
+        />
+        <MetricCard
+          label="LT Médio"
+          value={`${ltMedio}m`}
+          sub="clientes ativos"
+          color="#22c55e"
+          icon={Clock}
+        />
+        <MetricCard
+          label="Novos (qtd)"
+          value={novosQtd}
+          sub={thisMonthPrefix.replace("-", "/")}
+          color="#f59e0b"
+          icon={UserCheck}
+        />
+        <MetricCard
+          label="Novos (valor)"
+          value={formatCurrency(novosValor)}
+          sub="MRR este mês"
+          color="#10b981"
+          icon={DollarSign}
+        />
+        <MetricCard
+          label="Churn M0"
+          value={churnM0}
+          sub="1º mês"
+          color="#ef4444"
+          icon={AlertTriangle}
+        />
+      </div>
 
       {/* ── Row 1: filtros + ações ── */}
       <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
