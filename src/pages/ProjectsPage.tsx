@@ -80,10 +80,10 @@ function formatDate(d: string | undefined | null): string {
 //   Ter         → Receita (investimento)
 
 const SETORES = [
-  { id: "executar",      label: "Executar",       icon: "⚙️", color: "#22c55e",  metricLabel: "MRR"       },
-  { id: "saber",         label: "Saber",           icon: "🎓", color: "#8b5cf6",  metricLabel: "Receita"   },
-  { id: "potencializar", label: "Potencializar",   icon: "🚀", color: "#f59e0b",  metricLabel: "Comissão"  },
-  { id: "ter",           label: "Ter",             icon: "📦", color: "#06b6d4",  metricLabel: "Receita"   },
+  { id: "executar",      label: "Executar",       color: "#22c55e",  metricLabel: "MRR"       },
+  { id: "saber",         label: "Saber",           color: "#8b5cf6",  metricLabel: "Receita"   },
+  { id: "potencializar", label: "Potencializar",   color: "#f59e0b",  metricLabel: "Comissão"  },
+  { id: "ter",           label: "Ter",             color: "#06b6d4",  metricLabel: "Receita"   },
 ] as const;
 
 type SetorId = typeof SETORES[number]["id"];
@@ -323,7 +323,7 @@ function KanbanCard({ project, filterSetor, onClick, onEdit, onDelete }: KanbanC
         {setorConfig && (
           <span className="text-[9px] font-semibold rounded px-1 py-0.5 border"
             style={{ color: setorConfig.color, backgroundColor: setorConfig.color + "15", borderColor: setorConfig.color + "35" }}>
-            {setorConfig.icon} {setorConfig.label}
+            {setorConfig.label}
           </span>
         )}
         {project.usa && <span className="text-[9px]">🇺🇸</span>}
@@ -2424,7 +2424,6 @@ function ProductCatalogTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 type ViewMode = "kanban" | "list";
-type PageTab = "projects" | "catalog";
 
 export function ProjectsPage() {
   const { projects, loading, error, stats, saveProject, deleteProject, updateFase } = useProjects();
@@ -2433,9 +2432,6 @@ export function ProjectsPage() {
 
   // Sync filterSetor with sidebar store
   const { projectsSetor, setProjectsSetor } = useAppStore();
-
-  // Page tab
-  const [pageTab, setPageTab] = useState<PageTab>("projects");
 
   // UI state
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
@@ -2632,71 +2628,41 @@ export function ProjectsPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ gap: "6px" }}>
 
-      {/* ── Row 1: Header + Tabs + New button ── */}
+      {/* ── Row 1: STEP pills + New button ── */}
       <div className="flex-shrink-0 flex items-center gap-3 min-h-0">
-        {/* Page tabs */}
-        <button
-          onClick={() => setPageTab("projects")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold border-b-2 transition-colors ${
-            pageTab === "projects" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <LayoutGrid size={14} />
-          Projetos
-        </button>
-        <button
-          onClick={() => setPageTab("catalog")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold border-b-2 transition-colors ${
-            pageTab === "catalog" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Package size={14} />
-          Catálogo
-        </button>
-
         {/* STEP pills */}
-        {pageTab === "projects" && (
-          <div className="flex items-center gap-1.5 ml-2">
-            <button
-              onClick={() => setFilterSetor("")}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-                filterSetor === "" ? "bg-foreground/10 border-foreground/20 text-foreground" : "border-border/40 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Todos <span className="opacity-60">({projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length})</span>
-            </button>
-            {(["saber", "ter", "executar"] as const).map((sid) => {
-              const s = SETORES.find((x) => x.id === sid)!;
-              const count = projects.filter((p) => getProjectSetor(p) === sid).length;
-              const isActive = filterSetor === sid;
-              return (
-                <button key={sid} onClick={() => setFilterSetor(isActive ? "" : sid)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${isActive ? "border-transparent text-white shadow-sm" : "border-border/40 text-muted-foreground hover:text-foreground"}`}
-                  style={isActive ? { backgroundColor: s.color } : undefined}
-                >
-                  {s.label} <span className="opacity-70">({count})</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setFilterSetor("")}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+              filterSetor === "" ? "bg-foreground/10 border-foreground/20 text-foreground" : "border-border/40 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Todos <span className="opacity-60">({projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length})</span>
+          </button>
+          {(["saber", "ter", "executar"] as const).map((sid) => {
+            const count = projects.filter((p) => getProjectSetor(p) === sid).length;
+            const isActive = filterSetor === sid;
+            return (
+              <button key={sid} onClick={() => setFilterSetor(isActive ? "" : sid)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${isActive ? "bg-foreground/10 border-foreground/20 text-foreground" : "border-border/40 text-muted-foreground hover:text-foreground"}`}
+              >
+                {sid.charAt(0).toUpperCase() + sid.slice(1)} <span className="opacity-70">({count})</span>
+              </button>
+            );
+          })}
+        </div>
 
         <div className="flex-1" />
-        {pageTab === "projects" && (
-          <button onClick={openNew}
-            className="flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors flex-shrink-0"
-          >
-            <Plus size={13} />
-            Novo Projeto
-          </button>
-        )}
+        <button onClick={openNew}
+          className="flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors flex-shrink-0"
+        >
+          <Plus size={13} />
+          Novo Projeto
+        </button>
       </div>
 
-      {/* ── Catalog Tab ── */}
-      {pageTab === "catalog" && <ProductCatalogTab />}
-
-      {/* ── Projects Tab ── */}
-      {pageTab === "projects" && <>
+      {<>
 
       {/* ── Row 2: Filtros em linha única ── */}
       <div className="flex-shrink-0 flex items-center gap-2">
@@ -2963,7 +2929,7 @@ export function ProjectsPage() {
         )}
       </AnimatePresence>
 
-      </> /* end projects tab */}
+      </>}
     </div>
   );
 }
