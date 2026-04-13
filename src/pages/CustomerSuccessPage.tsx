@@ -1263,12 +1263,29 @@ function ClientDetailSidebar({
 
                   const maxTotal = Math.max(...monthData.map((m) => m.total), 1);
 
-                  // Ativos agora vs encerrados
-                  const ativos   = projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as never));
+                  // Separa por tipo de projeto
+                  const ativos = projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as never));
                   const encerrados = projects.filter((p) => !ACTIVE_MOMENTOS.includes(p.momento as never));
-                  const receitaRecorrente = ativos.reduce((s, p) => s + (p.mrr ?? 0), 0);
-                  // One-time: cliente pagou uma vez — mrr já é o valor total do contrato
-                  const receitaOnetimeAcum = encerrados.reduce((p_acc, p) => p_acc + (p.mrr ?? 0), 0);
+
+                  // Receita recorrente: projetos Executar ativos → mrr
+                  const ativosExecutar = ativos.filter((p) => !p.step || p.step.toLowerCase() === "executar");
+                  const receitaRecorrente = ativosExecutar.reduce((s, p) => s + (p.mrr ?? 0), 0);
+
+                  // One-time ativo: Saber (EE) + Ter (investimento)
+                  const ativosSaber = ativos.filter((p) => p.step?.toLowerCase() === "saber");
+                  const ativosTer   = ativos.filter((p) => p.step?.toLowerCase() === "ter");
+                  const receitaOnetimeAtivo =
+                    ativosSaber.reduce((s, p) => s + (p.estruturacao_estrategica ?? p.mrr ?? 0), 0) +
+                    ativosTer.reduce((s, p) => s + (p.investimento ?? p.mrr ?? 0), 0);
+
+                  // One-time acumulado (encerrados)
+                  const receitaOnetimeAcum =
+                    encerrados.filter((p) => p.step?.toLowerCase() === "saber")
+                      .reduce((s, p) => s + (p.estruturacao_estrategica ?? p.mrr ?? 0), 0) +
+                    encerrados.filter((p) => p.step?.toLowerCase() === "ter")
+                      .reduce((s, p) => s + (p.investimento ?? p.mrr ?? 0), 0) +
+                    encerrados.filter((p) => !p.step || p.step.toLowerCase() === "executar")
+                      .reduce((s, p) => s + (p.mrr ?? 0), 0);
 
                   return (
                     <div className="space-y-3">
@@ -1279,14 +1296,20 @@ function ClientDetailSidebar({
                         <div className="rounded-xl bg-emerald-500/8 border border-emerald-500/20 px-3 py-2">
                           <p className="text-[10px] text-emerald-400/80 font-medium">Recorrente ativo</p>
                           <p className="text-base font-bold text-emerald-400">{formatCurrency(receitaRecorrente)}<span className="text-[10px] font-normal text-emerald-400/60">/mês</span></p>
-                          <p className="text-[9px] text-muted-foreground/50 mt-0.5">{ativos.length} projeto{ativos.length !== 1 ? "s" : ""}</p>
+                          <p className="text-[9px] text-muted-foreground/50 mt-0.5">{ativosExecutar.length} projeto{ativosExecutar.length !== 1 ? "s" : ""}</p>
                         </div>
                         <div className="rounded-xl bg-violet-500/8 border border-violet-500/20 px-3 py-2">
-                          <p className="text-[10px] text-violet-400/80 font-medium">One-time gerado</p>
-                          <p className="text-base font-bold text-violet-400">{formatCurrency(receitaOnetimeAcum)}</p>
-                          <p className="text-[9px] text-muted-foreground/50 mt-0.5">{encerrados.length} projeto{encerrados.length !== 1 ? "s" : ""} encerrado{encerrados.length !== 1 ? "s" : ""}</p>
+                          <p className="text-[10px] text-violet-400/80 font-medium">One-time ativo</p>
+                          <p className="text-base font-bold text-violet-400">{formatCurrency(receitaOnetimeAtivo)}</p>
+                          <p className="text-[9px] text-muted-foreground/50 mt-0.5">{ativosSaber.length + ativosTer.length} projeto{(ativosSaber.length + ativosTer.length) !== 1 ? "s" : ""} Saber/Ter</p>
                         </div>
                       </div>
+                      {receitaOnetimeAcum > 0 && (
+                        <div className="rounded-xl bg-secondary/30 border border-border/30 px-3 py-1.5 flex items-center justify-between">
+                          <p className="text-[10px] text-muted-foreground">One-time acumulado (encerrados)</p>
+                          <p className="text-xs font-semibold text-muted-foreground">{formatCurrency(receitaOnetimeAcum)}</p>
+                        </div>
+                      )}
 
                       {/* Lista de projetos */}
                       <div className="space-y-1.5">
@@ -1304,13 +1327,25 @@ function ClientDetailSidebar({
                                 </div>
                               </div>
                               <div className="text-right flex-shrink-0 ml-3">
-                                <p className="font-semibold" style={{ color: isAtivo ? "#22c55e" : "#6b7280" }}>
-                                  {formatCurrency(p.mrr ?? 0)}
-                                  {isAtivo && <span className="text-[9px] font-normal opacity-60">/mês</span>}
-                                </p>
-                                <p className="text-[9px] text-muted-foreground/50">
-                                  {isAtivo ? "● ativo" : "○ encerrado"}
-                                </p>
+                                {(() => {
+                                  const s = p.step?.toLowerCase();
+                                  const isRecorrente = !s || s === "executar";
+                                  const valor = s === "saber" ? (p.estruturacao_estrategica ?? p.mrr ?? 0)
+                                    : s === "ter" ? (p.investimento ?? p.mrr ?? 0)
+                                    : (p.mrr ?? 0);
+                                  const label = isRecorrente ? "/mês" : " O.T.";
+                                  return (
+                                    <>
+                                      <p className="font-semibold" style={{ color: isAtivo ? (isRecorrente ? "#22c55e" : "#a78bfa") : "#6b7280" }}>
+                                        {formatCurrency(valor)}
+                                        <span className="text-[9px] font-normal opacity-60">{label}</span>
+                                      </p>
+                                      <p className="text-[9px] text-muted-foreground/50">
+                                        {isAtivo ? "● ativo" : "○ encerrado"}
+                                      </p>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </div>
                           );
@@ -3401,8 +3436,8 @@ function ClientRow({
   onSelect: () => void;
   onGoToProjects: () => void;
 }) {
-  const isChurned = client.status === "churned" || !!client.churn_date;
-  const isActive = !isChurned;
+  const isActive = client.status === "active" || client.status === "at_risk" || client.status === "upsell";
+  const isChurned = !isActive;
 
   // LTV acumulado — soma de tudo que o cliente já pagou (mrr histórico + EE + variável)
   const ltv = client.ltv ?? client.mrr ?? 0;
@@ -3493,14 +3528,13 @@ export function CustomerSuccessPage() {
   const [filterChurnFrom, setFilterChurnFrom]       = useState("");
   const [filterChurnTo, setFilterChurnTo]           = useState("");
 
-  // Helpers: considera null como ativo, usa churn_date como fallback
+  // Status: só é ativo se tiver status explícito active/at_risk/upsell
+  // null/vazio = não marcado no NocoDB = considerar inativo
   function isClientActive(c: Client): boolean {
-    if (c.status === "churned") return false;
-    if (c.churn_date) return false; // tem churn_date → churned
-    return true; // active, at_risk, upsell, null → ativo
+    return c.status === "active" || c.status === "at_risk" || c.status === "upsell";
   }
   function isClientChurned(c: Client): boolean {
-    return c.status === "churned" || !!c.churn_date;
+    return c.status === "churned" || !!c.churn_date || !c.status;
   }
 
   // Filtered + sorted

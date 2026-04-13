@@ -14,6 +14,7 @@ export interface ClientProject {
   id: string;
   name: string;
   mrr: number;
+  step?: string | null;
   momento?: string;
   squad_name?: string;
   start_date?: string | null;
@@ -214,7 +215,7 @@ export function useCustomerSuccess() {
       safeQuery<ClientProject>(
         supabase
           .from("projects")
-          .select("id, name, mrr, momento, squad_name, start_date, end_date, produtos, estruturacao_estrategica, variavel, investimento, margem_bruta")
+          .select("id, name, mrr, step, momento, squad_name, start_date, end_date, produtos, estruturacao_estrategica, variavel, investimento, margem_bruta")
           .eq("client_id", clientId)
           .order("start_date", { ascending: true })
       ),
