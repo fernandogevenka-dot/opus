@@ -2511,9 +2511,10 @@ export function ProjectsPage() {
     // Total de projetos (todos os do filtro atual)
     const totalProjetos = filtered.length;
 
-    // Receita Total = soma de todas as fontes de receita de todos os projetos filtrados
+    // Receita Total = MRR + estruturação + variável
+    // Nota: investimento = verba de mídia do cliente, não é receita da V4
     const receitaTotal = filtered.reduce((sum, p) =>
-      sum + (p.mrr ?? 0) + (p.estruturacao_estrategica ?? 0) + (p.variavel ?? 0) + (p.investimento ?? 0), 0);
+      sum + (p.mrr ?? 0) + (p.estruturacao_estrategica ?? 0) + (p.variavel ?? 0), 0);
 
     // MRR Ativo = soma do MRR apenas dos projetos ativos (recorrente puro)
     const mrrAtivo = activeFiltered.reduce((sum, p) => sum + (p.mrr ?? 0), 0);
