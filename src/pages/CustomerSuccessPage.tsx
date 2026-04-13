@@ -5,6 +5,9 @@ import { ACTIVE_MOMENTOS } from "@/hooks/useProjects";
 import { useClientFinancials } from "@/hooks/useClientFinancials";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import type { Client } from "@/types";
+import { useAppStore } from "@/store/appStore";
+import { useAuthStore } from "@/store/authStore";
+import { supabase } from "@/lib/supabase";
 import {
   Plus, Search, X, TrendingUp, Users, AlertTriangle,
   DollarSign, Star, Phone, Mail, Clock,
@@ -3269,184 +3272,369 @@ function CohortClientRow({
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── CAC Modal ───────────────────────────────────────────────────────────────
 
-// View modes: journey (columns by stage) or list
-type ViewMode = "journey" | "list" | "cohort";
+function CACModal({ onClose }: { onClose: () => void }) {
+  const { user } = useAuthStore();
+  const [month, setMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [amount, setAmount] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  async function handleSave() {
+    const val = parseFloat(amount.replace(/\./g, "").replace(",", "."));
+    if (!val || val <= 0) { setError("Informe um valor válido."); return; }
+    setSaving(true);
+    setError(null);
+    const { error: err } = await supabase.from("marketing_spend").upsert({
+      month: `${month}-01`,
+      amount: val,
+      notes: notes || null,
+      created_by: user?.id ?? null,
+    }, { onConflict: "month" });
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    setSuccess(true);
+    setTimeout(onClose, 1200);
+  }
+
+  // Month options — últimos 13 meses
+  const monthOptions = Array.from({ length: 13 }, (_, i) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return { value, label: label.charAt(0).toUpperCase() + label.slice(1) };
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        className="glass rounded-2xl border border-border/50 p-6 w-full max-w-md shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-base font-bold">Lançar CAC do mês</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Investimento total em marketing no mês</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-secondary">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Mês de referência</label>
+            <select
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="w-full h-9 px-3 rounded-xl border border-border/50 bg-background text-sm appearance-none"
+            >
+              {monthOptions.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Valor investido (R$)</label>
+            <input
+              type="text"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Ex: 8.500,00"
+              className="w-full h-9 px-3 rounded-xl border border-border/50 bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações (opcional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ex: Google Ads + Meta Ads"
+              className="w-full h-9 px-3 rounded-xl border border-border/50 bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+            />
+          </div>
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          {success && <p className="text-xs text-green-500">Salvo com sucesso!</p>}
+
+          <button
+            onClick={handleSave}
+            disabled={saving || success}
+            className="w-full h-9 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {saving ? "Salvando…" : success ? "Salvo!" : "Salvar"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Client Row (lista simplificada) ─────────────────────────────────────────
+
+function ClientRow({
+  client,
+  onSelect,
+  onGoToProjects,
+}: {
+  client: Client;
+  onSelect: () => void;
+  onGoToProjects: () => void;
+}) {
+  const isActive = client.status === "active" || client.status === "at_risk" || client.status === "upsell";
+  const isChurned = client.status === "churned";
+
+  // LTV acumulado — soma de tudo que o cliente já pagou (mrr histórico + EE + variável)
+  const ltv = client.ltv ?? client.mrr ?? 0;
+
+  // Data de cadastro formatada
+  const cadastro = client.operation_start_date
+    ? new Date(client.operation_start_date).toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" })
+    : "—";
+
+  // Data de churn formatada
+  const churn = client.churn_date
+    ? new Date(client.churn_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
+    : null;
+
+  return (
+    <div
+      className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/30 bg-background hover:border-border/60 transition-colors cursor-pointer group"
+      onClick={onSelect}
+    >
+      {/* Status dot */}
+      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+        isChurned ? "bg-muted-foreground/40" : isActive ? "bg-green-500" : "bg-yellow-500"
+      }`} />
+
+      {/* Nome */}
+      <p className="text-sm font-medium flex-1 truncate">{client.name}</p>
+
+      {/* Produto principal */}
+      {client.main_product && (
+        <span className="text-[10px] text-muted-foreground/70 truncate max-w-[120px] flex-shrink-0 hidden sm:block">
+          {client.main_product}
+        </span>
+      )}
+
+      {/* Projetos ativos */}
+      {(client as Client & { active_projects_count?: number }).active_projects_count !== undefined && (
+        <span className="text-[10px] text-muted-foreground flex-shrink-0 hidden md:block w-16 text-center">
+          {(client as Client & { active_projects_count?: number }).active_projects_count ?? 0} proj.
+        </span>
+      )}
+
+      {/* LTV */}
+      {ltv > 0 ? (
+        <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex-shrink-0 w-20 text-right">
+          {formatCurrency(ltv)}
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground/40 flex-shrink-0 w-20 text-right">—</span>
+      )}
+
+      {/* Data cadastro */}
+      <span className="text-[10px] text-muted-foreground flex-shrink-0 hidden lg:block w-16 text-center">{cadastro}</span>
+
+      {/* Churn */}
+      {churn && (
+        <span className="text-[10px] text-red-400 flex-shrink-0 w-20 text-right">{churn}</span>
+      )}
+
+      {/* Botão ir para projetos */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onGoToProjects(); }}
+        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100"
+        title="Ver projetos do cliente"
+      >
+        <Briefcase size={13} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function CustomerSuccessPage() {
   const cs = useCustomerSuccess();
+  const { setCurrentPage, setProjectsClientFilter, setProjectsSetor } = useAppStore();
 
   const [selectedId, setSelectedId]         = useState<string | null>(null);
   const [sidebarInitialTab, setSidebarInitialTab] = useState<DetailTab>("overview");
-  const [showNewModal, setShowNewModal] = useState(false);
-  const [viewMode, setViewMode]         = useState<ViewMode>("journey");
-  const [filters, setFilters]           = useState<ActiveFilters>(EMPTY_FILTERS);
+  const [showNewModal, setShowNewModal]      = useState(false);
+  const [showCACModal, setShowCACModal]      = useState(false);
 
-  // Apply all filters
+  // Filtros simplificados
+  const [search, setSearch]                 = useState("");
+  const [statusFilter, setStatusFilter]     = useState<"all" | "active" | "churned">("all");
+  const [sortBy, setSortBy]                 = useState<"name" | "cadastro" | "churn" | "ltv">("cadastro");
+  const [filterCadastroFrom, setFilterCadastroFrom] = useState("");
+  const [filterCadastroTo, setFilterCadastroTo]     = useState("");
+  const [filterChurnFrom, setFilterChurnFrom]       = useState("");
+  const [filterChurnTo, setFilterChurnTo]           = useState("");
+
+  // Filtered + sorted
   const filtered = cs.clients.filter((c) => {
-    if (filters.search && !c.name.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !(c.contact_name ?? "").toLowerCase().includes(filters.search.toLowerCase())) return false;
-    if (filters.status === "active") {
+    if (search) {
+      const q = search.toLowerCase();
+      if (!c.name.toLowerCase().includes(q) && !(c.contact_name ?? "").toLowerCase().includes(q)) return false;
+    }
+    if (statusFilter === "active") {
       if (c.status !== "active" && c.status !== "at_risk" && c.status !== "upsell") return false;
-    } else if (filters.status === "churned") {
+    } else if (statusFilter === "churned") {
       if (c.status !== "churned") return false;
     }
-    // status === "" → todos
-    if (filters.journey && c.journey_stage !== filters.journey) return false;
-    if (filters.team && c.team_name !== filters.team) return false;
-    if (filters.segment && c.segment !== filters.segment) return false;
-    if (filters.product && c.main_product !== filters.product) return false;
-    if (filters.situation && c.situation_color !== filters.situation) return false;
-    if (filters.category) {
-      const cat = getCategoryForProduct(c.main_product ?? "");
-      if (!cat || cat.id !== filters.category) return false;
-    }
-    // LT range filter
-    if (filters.ltRange) {
-      const range = LT_RANGES.find((r) => r.id === filters.ltRange);
-      if (range) {
-        const lt = ltMonths(c.journey_stage);
-        if (lt < range.min || lt > range.max) return false;
-      }
-    }
-    // Somente clientes com projeto ativo (status active/at_risk/upsell)
-    if (filters.onlyActiveProject && c.status !== "active" && c.status !== "at_risk" && c.status !== "upsell") return false;
-    // Filtro de safra — range ou mês exato
-    if (c.operation_start_date) {
-      const clientMonth = c.operation_start_date.slice(0, 7);
-      if (filters.cohortFrom && clientMonth < filters.cohortFrom) return false;
-      if (filters.cohortTo   && clientMonth > filters.cohortTo)   return false;
-      if (filters.cohortMonth && !filters.cohortFrom && !filters.cohortTo && clientMonth !== filters.cohortMonth) return false;
-    }
+    // Filtro por data de cadastro
+    if (filterCadastroFrom && c.operation_start_date && c.operation_start_date < filterCadastroFrom) return false;
+    if (filterCadastroTo   && c.operation_start_date && c.operation_start_date > filterCadastroTo + "-31") return false;
+    // Filtro por data de churn
+    if (filterChurnFrom && (!c.churn_date || c.churn_date < filterChurnFrom)) return false;
+    if (filterChurnTo   && (!c.churn_date || c.churn_date > filterChurnTo + "-31")) return false;
     return true;
+  }).sort((a, b) => {
+    if (sortBy === "name") return a.name.localeCompare(b.name, "pt-BR");
+    if (sortBy === "ltv") return (b.ltv ?? 0) - (a.ltv ?? 0);
+    if (sortBy === "churn") return (b.churn_date ?? "").localeCompare(a.churn_date ?? "");
+    // cadastro (padrão)
+    return (b.operation_start_date ?? "").localeCompare(a.operation_start_date ?? "");
   });
 
-  // Build kanban columns: one column per LT month that has clients
-  // If ltRange filter active → show only those months; otherwise all populated months
-  const kanbanColumns = (() => {
-    // Collect all unique journey_stage values from filtered clients
-    const stageSet = new Set(filtered.map((c) => c.journey_stage ?? "onboarding"));
-    const allStageIds = Array.from(stageSet).sort((a, b) => {
-      const na = a === "onboarding" ? 0 : parseInt(a.replace("month_", ""), 10);
-      const nb = b === "onboarding" ? 0 : parseInt(b.replace("month_", ""), 10);
-      return na - nb;
-    });
-    return allStageIds.map((id) => {
-      const lt = id === "onboarding" ? 0 : parseInt(id.replace("month_", ""), 10);
-      const label = `LT${lt}`;
-      return { id, label, color: getJourneyColor(id) };
-    });
-  })();
+  const activeCount  = cs.clients.filter((c) => c.status === "active" || c.status === "at_risk" || c.status === "upsell").length;
+  const churnedCount = cs.clients.filter((c) => c.status === "churned").length;
 
-  function byJourneyStage(stageId: string): Client[] {
-    return filtered.filter((c) => (c.journey_stage ?? "onboarding") === stageId);
+  function goToProjects(client: Client) {
+    setProjectsClientFilter(client.id);
+    setProjectsSetor("");
+    setCurrentPage("projects");
   }
 
   return (
     <div className="flex flex-col h-full gap-3">
 
-      {/* Quick Filters + Métricas */}
-      <QuickFiltersPanel filters={filters} onChange={setFilters} clients={cs.clients} />
+      {/* ── Row 1: filtros + ações ── */}
+      <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-end gap-3 flex-shrink-0">
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* View toggle */}
-          <div className="flex rounded-xl overflow-hidden border border-border/50">
-            <button
-              onClick={() => setViewMode("journey")}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                viewMode === "journey" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Jornada
+        {/* Status pills */}
+        <div className="flex items-center gap-1">
+          {(["all", "active", "churned"] as const).map((s) => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                statusFilter === s ? "bg-foreground/10 border-foreground/20 text-foreground" : "border-border/40 text-muted-foreground hover:text-foreground"
+              }`}>
+              {s === "all" ? `Todos (${cs.clients.length})` : s === "active" ? `Ativos (${activeCount})` : `Inativos (${churnedCount})`}
             </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                viewMode === "list" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Lista
-            </button>
-            <button
-              onClick={() => setViewMode("cohort")}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${
-                viewMode === "cohort" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Layers size={11} />
-              Safra
-            </button>
-          </div>
-
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus size={13} />
-            Novo cliente
-          </button>
+          ))}
         </div>
+
+        {/* Busca */}
+        <div className="relative flex-1 min-w-[160px]">
+          <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            className="h-8 w-full bg-background border border-border/50 rounded-xl pl-7 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/40"
+            placeholder="Buscar cliente..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"><X size={10} /></button>}
+        </div>
+
+        {/* Filtro cadastro de — até */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <span className="text-[10px] text-muted-foreground">Cadastro</span>
+          <input type="month" value={filterCadastroFrom} onChange={(e) => setFilterCadastroFrom(e.target.value)}
+            className="h-8 px-2 rounded-xl border border-border/50 bg-background text-xs focus:outline-none" />
+          <span className="text-[10px] text-muted-foreground">–</span>
+          <input type="month" value={filterCadastroTo} onChange={(e) => setFilterCadastroTo(e.target.value)}
+            className="h-8 px-2 rounded-xl border border-border/50 bg-background text-xs focus:outline-none" />
+        </div>
+
+        {/* Filtro churn de — até */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <span className="text-[10px] text-muted-foreground">Churn</span>
+          <input type="month" value={filterChurnFrom} onChange={(e) => setFilterChurnFrom(e.target.value)}
+            className="h-8 px-2 rounded-xl border border-border/50 bg-background text-xs focus:outline-none" />
+          <span className="text-[10px] text-muted-foreground">–</span>
+          <input type="month" value={filterChurnTo} onChange={(e) => setFilterChurnTo(e.target.value)}
+            className="h-8 px-2 rounded-xl border border-border/50 bg-background text-xs focus:outline-none" />
+        </div>
+
+        {/* Sort */}
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="h-8 px-2 rounded-xl border border-border/50 bg-background text-xs appearance-none flex-shrink-0">
+          <option value="cadastro">Mais recentes</option>
+          <option value="name">Nome A–Z</option>
+          <option value="ltv">Maior LTV</option>
+          <option value="churn">Churn recente</option>
+        </select>
+
+        <div className="flex-1" />
+
+        {/* Lançar CAC */}
+        <button onClick={() => setShowCACModal(true)}
+          className="flex items-center gap-1.5 h-8 px-3 rounded-xl border border-border/50 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors flex-shrink-0">
+          <DollarSign size={12} />
+          CAC do mês
+        </button>
+
+        {/* Novo cliente */}
+        <button onClick={() => setShowNewModal(true)}
+          className="flex items-center gap-1.5 h-8 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors flex-shrink-0">
+          <Plus size={13} />
+          Novo cliente
+        </button>
       </div>
 
-      {/* Main content */}
-      <div className="flex flex-1 gap-3 overflow-x-auto min-h-0 pb-2">
-        {viewMode === "journey" ? (
-          <>
-            {kanbanColumns.map((stage) => {
-              const stageClients = byJourneyStage(stage.id);
-              return (
-                <JourneyColumn
-                  key={stage.id}
-                  stage={stage}
-                  clients={stageClients}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  onAddClient={() => setShowNewModal(true)}
-                  onOpenTab={(clientId, tab) => {
-                    setSelectedId(clientId);
-                    setSidebarInitialTab(tab);
-                  }}
-                />
-              );
-            })}
-          </>
-        ) : viewMode === "cohort" ? (
-          /* Cohort / Safra view */
-          <CohortView
-            clients={filtered}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
+      {/* ── Table header ── */}
+      <div className="flex-shrink-0 flex items-center gap-3 px-3 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide">
+        <div className="w-2 flex-shrink-0" />
+        <span className="flex-1">Cliente</span>
+        <span className="hidden sm:block w-[120px]">Produto principal</span>
+        <span className="hidden md:block w-16 text-center">Projetos</span>
+        <span className="w-20 text-right">LTV total</span>
+        <span className="hidden lg:block w-16 text-center">Cadastro</span>
+        <span className="w-20 text-right">Churn</span>
+        <div className="w-7 flex-shrink-0" />
+      </div>
+
+      {/* ── Lista de clientes ── */}
+      <div className="flex-1 overflow-y-auto space-y-1 min-h-0 pr-1">
+        {cs.loading ? (
+          <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Carregando clientes…</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">Nenhum cliente encontrado.</div>
         ) : (
-          /* List view */
-          <div className="flex-1 overflow-y-auto space-y-2 min-w-0">
-            {filtered.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">
-                Nenhum cliente encontrado com os filtros selecionados.
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
-                {filtered.map((c) => (
-                  <ClientCard
-                    key={c.id}
-                    client={c}
-                    isSelected={selectedId === c.id}
-                    onSelect={() => setSelectedId(c.id)}
-                    onOpenTab={(tab) => {
-                      setSelectedId(c.id);
-                      setSidebarInitialTab(tab);
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          filtered.map((c) => (
+            <ClientRow
+              key={c.id}
+              client={c}
+              onSelect={() => { setSelectedId(c.id); setSidebarInitialTab("overview"); }}
+              onGoToProjects={() => goToProjects(c)}
+            />
+          ))
         )}
       </div>
 
+      {/* ── Detail Sidebar ── */}
       <AnimatePresence>
         {selectedId && (
           <ClientDetailSidebar
@@ -3461,6 +3649,7 @@ export function CustomerSuccessPage() {
         )}
       </AnimatePresence>
 
+      {/* ── New Client Modal ── */}
       <AnimatePresence>
         {showNewModal && (
           <NewClientModal
@@ -3471,6 +3660,11 @@ export function CustomerSuccessPage() {
             onClose={() => setShowNewModal(false)}
           />
         )}
+      </AnimatePresence>
+
+      {/* ── CAC Modal ── */}
+      <AnimatePresence>
+        {showCACModal && <CACModal onClose={() => setShowCACModal(false)} />}
       </AnimatePresence>
     </div>
   );

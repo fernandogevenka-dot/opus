@@ -178,6 +178,7 @@ export function GTMCockpitPage() {
     healthScores, healthDist, totalAtivos,
     productMix, tierCounts,
     gargalo,
+    cacByMonth, cacMedio,
   } = data;
 
   // Status das métricas GTM-5
@@ -319,11 +320,11 @@ export function GTMCockpitPage() {
               icon={ArrowDownRight}
             />
             <MetricCard
-              title="LTV:CAC"
-              value="—"
-              benchmark="> 3:1"
-              status="neutral"
-              subtitle="cadastre CAC nos clientes"
+              title="CAC médio"
+              value={cacMedio ? `R$ ${Math.round(cacMedio).toLocaleString("pt-BR")}` : "—"}
+              benchmark="< R$ 3k"
+              status={cacMedio === null ? "neutral" : cacMedio <= 3000 ? "ok" : cacMedio <= 6000 ? "warn" : "bad"}
+              subtitle={cacMedio ? "invest. ÷ novos clientes" : "lance o CAC do mês em Clientes"}
               icon={Target}
             />
           </div>
@@ -351,6 +352,36 @@ export function GTMCockpitPage() {
                 </div>
               ))}
             </div>
+
+            {/* CAC por mês */}
+            {cacByMonth.some((c) => c.investimento > 0) && (
+              <div className="mt-4 pt-4 border-t border-border/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">CAC Geral por mês</span>
+                  {cacMedio && (
+                    <span className="text-[10px] text-muted-foreground">Média: <span className="font-semibold text-foreground">R$ {Math.round(cacMedio).toLocaleString("pt-BR")}</span></span>
+                  )}
+                </div>
+                <div className="grid grid-cols-6 gap-1 text-[10px]">
+                  {cacByMonth.map((c) => (
+                    <div key={c.month} className="text-center space-y-0.5">
+                      <div className="text-muted-foreground/60">{c.month.slice(5, 7)}/{c.month.slice(2, 4)}</div>
+                      {c.investimento > 0 ? (
+                        <>
+                          <div className="text-violet-400">{fmtMRR(c.investimento)}</div>
+                          <div className="text-[9px] text-muted-foreground">{c.novos} novos</div>
+                          {c.cac !== null && (
+                            <div className="font-semibold text-foreground">R$ {Math.round(c.cac).toLocaleString("pt-BR")}</div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-muted-foreground/30">—</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </motion.section>
 

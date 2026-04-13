@@ -2436,8 +2436,8 @@ export function ProjectsPage() {
   const clients = useClientOptions();
   const squads = useSquadOptions();
 
-  // Sync filterSetor with sidebar store
-  const { projectsSetor, setProjectsSetor } = useAppStore();
+  // Sync filterSetor / clientFilter with sidebar store
+  const { projectsSetor, setProjectsSetor, projectsClientFilter, setProjectsClientFilter } = useAppStore();
 
   // UI state
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
@@ -2474,6 +2474,9 @@ export function ProjectsPage() {
   // Filtered projects
   const filtered = useMemo(() => {
     return projects.filter((p) => {
+      // Filtro por cliente (navegação de Clientes → Projetos)
+      if (projectsClientFilter && p.client_id !== projectsClientFilter) return false;
+
       // Oculta inativos/encerrados por padrão
       const isInative = !ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento);
       if (!showInactive && isInative) return false;
@@ -2496,7 +2499,7 @@ export function ProjectsPage() {
       })();
       return matchSearch && matchMomento && matchSquad && matchDupla && matchSetor;
     });
-  }, [projects, search, filterMomento, filterSquad, filterDupla, filterSetor, showInactive]);
+  }, [projects, search, filterMomento, filterSquad, filterDupla, filterSetor, showInactive, projectsClientFilter]);
 
   // Meses disponíveis para o filtro (baseado em start_date dos projetos)
   const mesOptions = useMemo(() => {
@@ -2669,6 +2672,17 @@ export function ProjectsPage() {
       </div>
 
       {<>
+
+      {/* ── Banner filtro por cliente ── */}
+      {projectsClientFilter && (
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium">
+          <Users size={12} />
+          <span>Projetos do cliente: {filtered[0]?.client_name ?? "..."}</span>
+          <button onClick={() => setProjectsClientFilter(null)} className="ml-auto w-5 h-5 flex items-center justify-center rounded hover:bg-primary/20">
+            <X size={10} />
+          </button>
+        </div>
+      )}
 
       {/* ── Row 2: Filtros em linha única ── */}
       <div className="flex-shrink-0 flex items-center gap-2">

@@ -11,6 +11,7 @@ interface AppState {
   sidebarOpen: boolean;
   knockNotification: { fromUserId: string; fromName: string; fromAvatar: string } | null;
   projectsSetor: ProjectsSetor;
+  projectsClientFilter: string | null; // client_id para filtrar projetos ao navegar de Clientes
   setCurrentPage: (page: AppPage) => void;
   navigateToProfile: (userId: string) => void;
   setSidebarOpen: (open: boolean) => void;
@@ -18,6 +19,7 @@ interface AppState {
     notif: { fromUserId: string; fromName: string; fromAvatar: string } | null
   ) => void;
   setProjectsSetor: (setor: ProjectsSetor) => void;
+  setProjectsClientFilter: (clientId: string | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -28,11 +30,13 @@ export const useAppStore = create<AppState>()(
       sidebarOpen: true,
       knockNotification: null,
       projectsSetor: "",
+      projectsClientFilter: null,
       setCurrentPage: (page) => set({ currentPage: page }),
       navigateToProfile: (userId) => set({ currentPage: "profile", profileUserId: userId }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       setKnockNotification: (notif) => set({ knockNotification: notif }),
       setProjectsSetor: (setor) => set({ projectsSetor: setor }),
+      setProjectsClientFilter: (clientId) => set({ projectsClientFilter: clientId }),
     }),
     {
       name: "voffice-app",

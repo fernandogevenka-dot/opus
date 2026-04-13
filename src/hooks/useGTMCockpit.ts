@@ -370,10 +370,18 @@ function identificarGargalo(
 }
 
 // ── Hook principal ─────────────────────────────────────────────────────────────
+export interface MarketingSpendEntry {
+  id: string;
+  month: string; // "YYYY-MM-DD" dia 1
+  amount: number;
+  notes: string | null;
+}
+
 export function useGTMCockpit() {
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [picCycles, setPicCycles] = useState<PICRow[]>([]);
+  const [marketingSpend, setMarketingSpend] = useState<MarketingSpendEntry[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingPIC, setLoadingPIC] = useState(true);
@@ -408,6 +416,16 @@ export function useGTMCockpit() {
       .then(({ data }) => {
         if (data) setPicCycles(data as PICRow[]);
         setLoadingPIC(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    supabase
+      .from("marketing_spend")
+      .select("id, month, amount, notes")
+      .order("month", { ascending: true })
+      .then(({ data }) => {
+        if (data) setMarketingSpend(data as MarketingSpendEntry[]);
       });
   }, []);
 
@@ -540,6 +558,21 @@ export function useGTMCockpit() {
       critico:  healthScores.filter((h) => h.status === "critico").length,
     };
 
+    // CAC por mês: investimento_marketing / novos_clientes_no_mês
+    const cacByMonth = months6.map((m) => {
+      const spend = marketingSpend.find((s) => s.month.slice(0, 7) === m);
+      const novos = waterfall.find((w) => w.month === m)?.novo ?? 0;
+      const investimento = spend?.amount ?? 0;
+      const cac = novos > 0 && investimento > 0 ? investimento / novos : null;
+      return { month: m, investimento, novos, cac };
+    });
+
+    // CAC médio últimos 6 meses com dados
+    const cacComDados = cacByMonth.filter((c) => c.cac !== null);
+    const cacMedio = cacComDados.length
+      ? cacComDados.reduce((s, c) => s + (c.cac ?? 0), 0) / cacComDados.length
+      : null;
+
     return {
       // Posição
       mrrAtual,
@@ -560,8 +593,11 @@ export function useGTMCockpit() {
       tierCounts,
       // Gargalo
       gargalo,
+      // CAC
+      cacByMonth,
+      cacMedio,
     };
-  }, [clients, projects, products]);
+  }, [clients, projects, products, marketingSpend]);
 
   return { data: result, loading };
 }
