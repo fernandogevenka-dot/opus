@@ -2451,6 +2451,7 @@ export function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [filterMomento, setFilterMomento] = useState<string>("");
   const [filterSquad, setFilterSquad] = useState<string>("");
+  const [filterDupla, setFilterDupla] = useState<string>("");
   // Inativos ocultos por padrão
   const [showInactive, setShowInactive] = useState(false);
 
@@ -2490,6 +2491,7 @@ export function ProjectsPage() {
         (p.squad_name ?? "").toLowerCase().includes(q);
       const matchMomento = !filterMomento || p.momento === filterMomento;
       const matchSquad = !filterSquad || p.squad_name === filterSquad;
+      const matchDupla = !filterDupla || p.gestor_projeto === filterDupla || p.gestor_trafego === filterDupla;
       // Setor: verifica se algum produto do projeto pertence ao setor selecionado
       const matchSetor = !filterSetor || (() => {
         const setor = getProjectSetor(p);
@@ -2497,9 +2499,9 @@ export function ProjectsPage() {
         if (!setor && filterSetor === "executar" && (p.mrr ?? 0) > 0) return true;
         return setor === filterSetor;
       })();
-      return matchSearch && matchMomento && matchSquad && matchSetor;
+      return matchSearch && matchMomento && matchSquad && matchDupla && matchSetor;
     });
-  }, [projects, search, filterMomento, filterSquad, filterSetor, showInactive]);
+  }, [projects, search, filterMomento, filterSquad, filterDupla, filterSetor, showInactive]);
 
   // Stats dinâmicas baseadas no filtro atual
   const filteredStats = useMemo(() => {
@@ -2584,37 +2586,24 @@ export function ProjectsPage() {
   }
 
 
+  // Duplas disponíveis (gestor_projeto)
+  const duplaOptions = useMemo(() => {
+    const names = new Set(projects.map((p) => p.gestor_projeto).filter(Boolean));
+    return Array.from(names).sort() as string[];
+  }, [projects]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full gap-3 overflow-hidden">
-      {/* ── Header ── */}
-      <div className="flex-shrink-0 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold">Projetos</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Gerencie projetos ativos, encerrados e o catálogo de produtos
-          </p>
-        </div>
-        {pageTab === "projects" && (
-          <button
-            onClick={openNew}
-            className="flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3.5 py-2 text-sm font-medium hover:bg-primary/90 transition-colors flex-shrink-0"
-          >
-            <Plus size={15} />
-            Novo Projeto
-          </button>
-        )}
-      </div>
+    <div className="flex flex-col h-full overflow-hidden" style={{ gap: "6px" }}>
 
-      {/* ── Page Tabs ── */}
-      <div className="flex-shrink-0 flex items-center gap-1 border-b border-border/40 pb-0">
+      {/* ── Row 1: Header + Tabs + New button ── */}
+      <div className="flex-shrink-0 flex items-center gap-3 min-h-0">
+        {/* Page tabs */}
         <button
           onClick={() => setPageTab("projects")}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-            pageTab === "projects"
-              ? "border-primary text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground"
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold border-b-2 transition-colors ${
+            pageTab === "projects" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <LayoutGrid size={14} />
@@ -2622,15 +2611,50 @@ export function ProjectsPage() {
         </button>
         <button
           onClick={() => setPageTab("catalog")}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-            pageTab === "catalog"
-              ? "border-primary text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground"
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold border-b-2 transition-colors ${
+            pageTab === "catalog" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <Package size={14} />
-          Catálogo de Produtos
+          Catálogo
         </button>
+
+        {/* STEP pills */}
+        {pageTab === "projects" && (
+          <div className="flex items-center gap-1.5 ml-2">
+            <button
+              onClick={() => setFilterSetor("")}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                filterSetor === "" ? "bg-foreground/10 border-foreground/20 text-foreground" : "border-border/40 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Todos <span className="opacity-60">({projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length})</span>
+            </button>
+            {(["saber", "ter", "executar"] as const).map((sid) => {
+              const s = SETORES.find((x) => x.id === sid)!;
+              const count = projects.filter((p) => getProjectSetor(p) === sid).length;
+              const isActive = filterSetor === sid;
+              return (
+                <button key={sid} onClick={() => setFilterSetor(isActive ? "" : sid)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${isActive ? "border-transparent text-white shadow-sm" : "border-border/40 text-muted-foreground hover:text-foreground"}`}
+                  style={isActive ? { backgroundColor: s.color } : undefined}
+                >
+                  {s.label} <span className="opacity-70">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex-1" />
+        {pageTab === "projects" && (
+          <button onClick={openNew}
+            className="flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors flex-shrink-0"
+          >
+            <Plus size={13} />
+            Novo Projeto
+          </button>
+        )}
       </div>
 
       {/* ── Catalog Tab ── */}
@@ -2639,196 +2663,115 @@ export function ProjectsPage() {
       {/* ── Projects Tab ── */}
       {pageTab === "projects" && <>
 
-      {/* ── Sub-abas STEP ── */}
+      {/* ── Row 2: Filtros em linha única ── */}
       <div className="flex-shrink-0 flex items-center gap-2">
-        {/* "Todos" pill */}
+
+        {/* Squad */}
+        <div className="relative flex-1 min-w-0">
+          <select value={filterSquad} onChange={(e) => setFilterSquad(e.target.value)}
+            className="h-8 w-full px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7"
+          >
+            <option value="">Squad</option>
+            {squadOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        </div>
+
+        {/* Etapa Jornada */}
+        <div className="relative flex-1 min-w-0">
+          <select value={filterMomento} onChange={(e) => setFilterMomento(e.target.value)}
+            className="h-8 w-full px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7"
+          >
+            <option value="">Etapa Jornada</option>
+            {MOMENTO_LABELS.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        </div>
+
+        {/* Dupla */}
+        <div className="relative flex-1 min-w-0">
+          <select value={filterDupla} onChange={(e) => setFilterDupla(e.target.value)}
+            className="h-8 w-full px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7"
+          >
+            <option value="">Dupla</option>
+            {duplaOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        </div>
+
+        {/* Busca */}
+        <div className="relative flex-1 min-w-0">
+          <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            className="h-8 w-full bg-background border border-border/50 rounded-xl pl-7 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/40"
+            placeholder="Buscar..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <X size={10} />
+            </button>
+          )}
+        </div>
+
+        {/* Toggle inativos */}
         <button
-          onClick={() => setFilterSetor("")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-            filterSetor === ""
-              ? "bg-foreground/10 border-foreground/20 text-foreground"
-              : "border-border/40 text-muted-foreground hover:text-foreground hover:border-border/80"
+          onClick={() => setShowInactive((v) => !v)}
+          className={`flex items-center gap-1 h-8 px-2.5 rounded-xl border text-xs font-medium transition-all flex-shrink-0 ${
+            showInactive ? "bg-secondary text-foreground border-border/80" : "border-border/50 text-muted-foreground hover:text-foreground"
           }`}
         >
-          Todos
-          <span className="ml-0.5 opacity-60 text-[10px]">
-            ({projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length})
-          </span>
+          {showInactive ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+          Inativos
+          {inactiveCount > 0 && <span className="opacity-60">({inactiveCount})</span>}
         </button>
 
-        {/* Saber, Ter, Executar */}
-        {(["saber", "ter", "executar"] as const).map((sid) => {
-          const s = SETORES.find((x) => x.id === sid)!;
-          const count = projects.filter((p) => {
-            const setor = getProjectSetor(p);
-            if (!setor && sid === "executar" && (p.mrr ?? 0) > 0) return true;
-            return setor === sid;
-          }).length;
-          const isActive = filterSetor === sid;
-          return (
-            <button
-              key={sid}
-              onClick={() => setFilterSetor(isActive ? "" : sid)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                isActive
-                  ? "border-transparent text-white shadow-sm"
-                  : "border-border/40 text-muted-foreground hover:text-foreground hover:border-border/80"
-              }`}
-              style={isActive ? { backgroundColor: s.color } : undefined}
-            >
-              <span>{s.icon}</span>
-              {s.label}
-              <span className={`ml-0.5 text-[10px] ${isActive ? "opacity-80" : "opacity-60"}`}>
-                ({count})
-              </span>
-            </button>
-          );
-        })}
+        {/* View toggle */}
+        <div className="flex items-center gap-0.5 bg-background border border-border/50 rounded-xl p-0.5 h-8 flex-shrink-0">
+          <button onClick={() => setViewMode("kanban")}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${viewMode === "kanban" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            title="Kanban"
+          >
+            <LayoutGrid size={13} />
+          </button>
+          <button onClick={() => setViewMode("list")}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${viewMode === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            title="Lista"
+          >
+            <List size={13} />
+          </button>
+        </div>
+
+        {/* Limpar filtros */}
+        {(filterMomento || filterSquad || filterDupla || search || filterSetor) && (
+          <button
+            onClick={() => { setSearch(""); setFilterMomento(""); setFilterSquad(""); setFilterDupla(""); setFilterSetor(""); }}
+            className="flex items-center gap-1 h-8 px-2 text-xs text-muted-foreground hover:text-foreground flex-shrink-0"
+          >
+            <X size={11} />
+          </button>
+        )}
       </div>
 
-      {/* ── Filtros em grade (padrão CS) ── */}
-      <div className="flex-shrink-0 flex flex-col gap-3">
-
-        {/* 4 selects com label */}
-        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 items-end">
-
-          {/* Squad */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground px-1">Squad</label>
-            <div className="relative">
-              <select
-                value={filterSquad}
-                onChange={(e) => setFilterSquad(e.target.value)}
-                className="h-11 px-4 rounded-2xl border border-border/50 bg-background shadow-sm text-sm text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all pr-9 w-full"
-              >
-                <option value="">Todos os squads</option>
-                {squadOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+      {/* ── Row 3: KPIs mini em linha ── */}
+      <div className="flex-shrink-0 grid grid-cols-4 gap-2">
+        {[
+          { label: "Projetos", value: filteredStats.totalProjetos, sub: `${filteredStats.active} ativos` },
+          { label: "Receita Total", value: formatMRR(filteredStats.receitaTotal), sub: "todas as fontes" },
+          { label: "MRR Ativo", value: formatMRR(filteredStats.mrrAtivo), sub: "recorrente" },
+          { label: "Churn Financeiro", value: formatMRR(filteredStats.churnFinanceiro), sub: `${filtered.filter(p => !!p.churn_date).length} projetos` },
+        ].map((kpi) => (
+          <div key={kpi.label} className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground">{kpi.label}</p>
+              <p className="text-base font-bold tracking-tight leading-tight">{kpi.value}</p>
             </div>
+            <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">{kpi.sub}</p>
           </div>
-
-          {/* Momento */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground px-1">Momento</label>
-            <div className="relative">
-              <select
-                value={filterMomento}
-                onChange={(e) => setFilterMomento(e.target.value)}
-                className="h-11 px-4 rounded-2xl border border-border/50 bg-background shadow-sm text-sm text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all pr-9 w-full"
-              >
-                <option value="">Todos os momentos</option>
-                {MOMENTO_LABELS.map((m) => (
-                  <option key={m} value={m}>{m} ({projects.filter((p) => p.momento === m).length})</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Busca + controles */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground px-1">Buscar</label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <input
-                  className="h-11 w-full bg-background border border-border/50 rounded-2xl pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 placeholder:text-muted-foreground/40 transition-all"
-                  placeholder="Projetos..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-              {/* Toggle inativos */}
-              <button
-                onClick={() => setShowInactive((v) => !v)}
-                className={`flex items-center gap-1.5 h-11 px-3 rounded-2xl border text-xs font-medium transition-all flex-shrink-0 ${
-                  showInactive
-                    ? "bg-secondary text-foreground border-border/80 shadow-sm"
-                    : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border/80"
-                }`}
-                title={showInactive ? "Ocultar inativos/encerrados" : "Mostrar inativos/encerrados"}
-              >
-                {showInactive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                <span>Inativos</span>
-                {inactiveCount > 0 && (
-                  <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${showInactive ? "bg-foreground/10" : "bg-muted-foreground/20"}`}>
-                    {inactiveCount}
-                  </span>
-                )}
-              </button>
-
-              {/* View toggle */}
-              <div className="flex items-center gap-0.5 bg-background border border-border/50 rounded-2xl p-0.5 shadow-sm h-11 px-1 flex-shrink-0">
-                <button
-                  onClick={() => setViewMode("kanban")}
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
-                    viewMode === "kanban" ? "bg-secondary text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                  title="Kanban"
-                >
-                  <LayoutGrid size={14} />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
-                    viewMode === "list" ? "bg-secondary text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                  title="Lista"
-                >
-                  <List size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* KPIs */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Total de Projetos</span>
-            <span className="text-2xl font-bold tracking-tight">{filteredStats.totalProjetos}</span>
-            <span className="text-[11px] text-muted-foreground/60">{filteredStats.active} ativos</span>
-          </div>
-          <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Receita Total</span>
-            <span className="text-2xl font-bold tracking-tight">{formatMRR(filteredStats.receitaTotal)}</span>
-            <span className="text-[11px] text-muted-foreground/60">todas as fontes</span>
-          </div>
-          <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">MRR Ativo</span>
-            <span className="text-2xl font-bold tracking-tight">{formatMRR(filteredStats.mrrAtivo)}</span>
-            <span className="text-[11px] text-muted-foreground/60">só receita recorrente</span>
-          </div>
-          <div className="rounded-2xl border border-border/50 bg-background shadow-sm px-5 py-4 flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Churn Financeiro</span>
-            <span className="text-2xl font-bold tracking-tight">{formatMRR(filteredStats.churnFinanceiro)}</span>
-            <span className="text-[11px] text-muted-foreground/60">{filtered.filter(p => !!p.churn_date).length} projetos</span>
-          </div>
-        </div>
-
-        {/* Linha de resultado + limpar filtros */}
-        {(filterMomento || filterSquad || search || filterSetor) && (
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              {filtered.length} {filtered.length === 1 ? "projeto" : "projetos"} encontrado{filtered.length !== 1 ? "s" : ""}
-            </span>
-            <button
-              onClick={() => { setSearch(""); setFilterMomento(""); setFilterSquad(""); setFilterSetor(""); }}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X size={11} />
-              Limpar filtros
-            </button>
-          </div>
-        )}
-
+        ))}
       </div>
 
       {/* ── Loading / Error states ── */}
@@ -2857,13 +2800,7 @@ export function ProjectsPage() {
           <AnimatePresence mode="wait">
             {/* ── Step Kanban para Ter e Saber ── */}
             {viewMode === "kanban" && (filterSetor === "ter" || filterSetor === "saber") ? (
-              <motion.div
-                key={`step-kanban-${filterSetor}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="h-full"
-              >
+              <motion.div key={`step-kanban-${filterSetor}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
                 <StepKanbanBoard
                   projects={filtered}
                   tipo={filterSetor as "ter" | "saber"}
@@ -2874,11 +2811,7 @@ export function ProjectsPage() {
                 />
               </motion.div>
             ) : viewMode === "kanban" ? (
-              <motion.div
-                key="kanban"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+              <motion.div key="kanban" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 className="h-full overflow-x-auto overflow-y-hidden"
               >
                 {kanbanColumns.length === 0 ? (
@@ -2907,11 +2840,7 @@ export function ProjectsPage() {
                 )}
               </motion.div>
             ) : (
-              <motion.div
-                key="list"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+              <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 className="h-full overflow-y-auto pr-0.5"
               >
                 <ListView
@@ -2928,40 +2857,20 @@ export function ProjectsPage() {
 
       {/* ── Detail Modal ── */}
       {detailProject && (
-        <DetailModal
-          project={detailProject}
-          onClose={() => setDetailProject(null)}
-          onEdit={() => openEdit(detailProject)}
-        />
+        <DetailModal project={detailProject} onClose={() => setDetailProject(null)} onEdit={() => openEdit(detailProject)} />
       )}
 
       {/* ── Form Modal ── */}
       {editProject !== undefined && (
-        <FormModal
-          project={editProject}
-          onClose={closeEdit}
-          onSave={handleSave}
-          clients={clients}
-          squads={squads}
-        />
+        <FormModal project={editProject} onClose={closeEdit} onSave={handleSave} clients={clients} squads={squads} />
       )}
 
       {/* ── Delete Confirm ── */}
       <AnimatePresence>
         {deleteConfirm && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />
-            <motion.div
-              className="relative z-10 glass-strong rounded-2xl p-6 w-full max-w-sm shadow-2xl"
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-            >
+            <motion.div className="relative z-10 glass-strong rounded-2xl p-6 w-full max-w-sm shadow-2xl" initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center flex-shrink-0">
                   <Trash2 size={18} className="text-destructive" />
@@ -2972,20 +2881,13 @@ export function ProjectsPage() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mb-5">
-                Tem certeza que deseja excluir o projeto{" "}
-                <span className="font-semibold text-foreground">{deleteConfirm.name}</span>?
+                Tem certeza que deseja excluir <span className="font-semibold text-foreground">{deleteConfirm.name}</span>?
               </p>
               <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-secondary/60 transition-colors"
-                >
+                <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-secondary/60 transition-colors">
                   Cancelar
                 </button>
-                <button
-                  onClick={() => confirmDelete(deleteConfirm)}
-                  className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 transition-colors"
-                >
+                <button onClick={() => confirmDelete(deleteConfirm)} className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 transition-colors">
                   Excluir
                 </button>
               </div>
