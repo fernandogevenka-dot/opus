@@ -3401,8 +3401,8 @@ function ClientRow({
   onSelect: () => void;
   onGoToProjects: () => void;
 }) {
-  const isActive = client.status === "active" || client.status === "at_risk" || client.status === "upsell";
-  const isChurned = client.status === "churned";
+  const isChurned = client.status === "churned" || !!client.churn_date;
+  const isActive = !isChurned;
 
   // LTV acumulado — soma de tudo que o cliente já pagou (mrr histórico + EE + variável)
   const ltv = client.ltv ?? client.mrr ?? 0;
@@ -3493,17 +3493,24 @@ export function CustomerSuccessPage() {
   const [filterChurnFrom, setFilterChurnFrom]       = useState("");
   const [filterChurnTo, setFilterChurnTo]           = useState("");
 
+  // Helpers: considera null como ativo, usa churn_date como fallback
+  function isClientActive(c: Client): boolean {
+    if (c.status === "churned") return false;
+    if (c.churn_date) return false; // tem churn_date → churned
+    return true; // active, at_risk, upsell, null → ativo
+  }
+  function isClientChurned(c: Client): boolean {
+    return c.status === "churned" || !!c.churn_date;
+  }
+
   // Filtered + sorted
   const filtered = cs.clients.filter((c) => {
     if (search) {
       const q = search.toLowerCase();
       if (!c.name.toLowerCase().includes(q) && !(c.contact_name ?? "").toLowerCase().includes(q)) return false;
     }
-    if (statusFilter === "active") {
-      if (c.status !== "active" && c.status !== "at_risk" && c.status !== "upsell") return false;
-    } else if (statusFilter === "churned") {
-      if (c.status !== "churned") return false;
-    }
+    if (statusFilter === "active" && !isClientActive(c)) return false;
+    if (statusFilter === "churned" && !isClientChurned(c)) return false;
     // Filtro por data de cadastro
     if (filterCadastroFrom && c.operation_start_date && c.operation_start_date < filterCadastroFrom) return false;
     if (filterCadastroTo   && c.operation_start_date && c.operation_start_date > filterCadastroTo + "-31") return false;
@@ -3519,8 +3526,8 @@ export function CustomerSuccessPage() {
     return (b.operation_start_date ?? "").localeCompare(a.operation_start_date ?? "");
   });
 
-  const activeCount  = cs.clients.filter((c) => c.status === "active" || c.status === "at_risk" || c.status === "upsell").length;
-  const churnedCount = cs.clients.filter((c) => c.status === "churned").length;
+  const activeCount  = cs.clients.filter(isClientActive).length;
+  const churnedCount = cs.clients.filter(isClientChurned).length;
 
   function goToProjects(client: Client) {
     setProjectsClientFilter(client.id);
