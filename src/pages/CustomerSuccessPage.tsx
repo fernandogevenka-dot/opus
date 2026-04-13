@@ -3568,11 +3568,12 @@ export function CustomerSuccessPage() {
 
   // Status: só é ativo se tiver status explícito active/at_risk/upsell
   // null/vazio = não marcado no NocoDB = considerar inativo
+  // IMPORTANTE: as funções são mutuamente exclusivas — a decisão é feita apenas pelo campo status
   function isClientActive(c: Client): boolean {
     return c.status === "active" || c.status === "at_risk" || c.status === "upsell";
   }
   function isClientChurned(c: Client): boolean {
-    return c.status === "churned" || !!c.churn_date || !c.status;
+    return !isClientActive(c);
   }
 
   // Filtered + sorted
