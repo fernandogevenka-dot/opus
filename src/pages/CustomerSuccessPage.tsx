@@ -11,6 +11,7 @@ import {
   BarChart3, Calendar, RefreshCw, CheckCircle2,
   ChevronDown, Package, UserCheck, Zap, Filter, Layers, Briefcase,
   FileText, Link, Building2, MapPin, CreditCard, Sparkles, Upload, Pencil,
+  ToggleLeft, ToggleRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { timeAgo } from "@/lib/utils";
@@ -590,20 +591,35 @@ function QuickFiltersPanel({
         </div>
       </div>
 
-      {/* Search — abaixo dos números */}
-      <div className="relative">
-        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
-        <input
-          value={filters.search}
-          onChange={(e) => onChange({ ...filters, search: e.target.value })}
-          placeholder="Pesquisar cliente..."
-          className="h-11 rounded-2xl border border-border/50 bg-background shadow-sm pl-9 pr-4 text-sm w-full focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all placeholder:text-muted-foreground/40"
-        />
-        {filters.search && (
-          <button onClick={() => onChange({ ...filters, search: "" })} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground">
-            <X size={12} />
-          </button>
-        )}
+      {/* Search + toggle inativos */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
+          <input
+            value={filters.search}
+            onChange={(e) => onChange({ ...filters, search: e.target.value })}
+            placeholder="Pesquisar cliente..."
+            className="h-11 rounded-2xl border border-border/50 bg-background shadow-sm pl-9 pr-4 text-sm w-full focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all placeholder:text-muted-foreground/40"
+          />
+          {filters.search && (
+            <button onClick={() => onChange({ ...filters, search: "" })} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground">
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        {/* Toggle inativos/churned */}
+        <button
+          onClick={() => onChange({ ...filters, status: filters.status === "churned" ? "active" : "churned" })}
+          className={`flex items-center gap-1.5 h-11 px-3 rounded-2xl border text-xs font-medium transition-all flex-shrink-0 ${
+            filters.status === "churned"
+              ? "bg-red-500/10 border-red-500/30 text-red-400"
+              : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border/80"
+          }`}
+          title={filters.status === "churned" ? "Ver apenas ativos" : "Ver inativos/churned"}
+        >
+          {filters.status === "churned" ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+          Inativos
+        </button>
       </div>
 
     </div>

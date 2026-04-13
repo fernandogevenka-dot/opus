@@ -71,7 +71,7 @@ function isActiveInMonth(p: Project, yearMonth: string): boolean {
 
 function getMonthMRR(projects: Project[], yearMonth: string): number {
   return projects
-    .filter((p) => isActiveInMonth(p, yearMonth))
+    .filter((p) => isActiveInMonth(p, yearMonth) && p.billing_type !== "one_time")
     .reduce((sum, p) => sum + (p.mrr ?? 0), 0);
 }
 
@@ -111,9 +111,9 @@ function buildWaterfall(projects: Project[], months: string[]): MonthWaterfall[]
     const activePrevIds = new Set(activePrev.map((p) => p.id));
     const activePrevClientIds = new Set(activePrev.map((p) => p.client_id).filter(Boolean));
 
-    // MRR churned: projetos com churn_date neste mês
+    // MRR churned: projetos recorrentes com churn_date neste mês
     const churnedProjects = projects.filter(
-      (p) => p.churn_date && isoMonth(p.churn_date) === month
+      (p) => p.churn_date && isoMonth(p.churn_date) === month && p.billing_type !== "one_time"
     );
     const churned = churnedProjects.reduce((s, p) => s + (p.mrr ?? 0), 0);
 
@@ -202,7 +202,10 @@ function calcHealthScore(
       p.client_id === client.id &&
       ACTIVE_MOMENTOS.includes(p.momento as never)
   );
-  const mrr = clientProjects.reduce((s, p) => s + (p.mrr ?? 0), 0);
+  // MRR considera apenas projetos recorrentes
+  const mrr = clientProjects
+    .filter((p) => p.billing_type !== "one_time")
+    .reduce((s, p) => s + (p.mrr ?? 0), 0);
 
   // Situação (situation_color) — 25%
   const situacaoMap: Record<string, number> = {

@@ -46,6 +46,9 @@ const ALL_NAV_GROUPS: NavGroup[] = [
       { id: "mbr",           label: "MBR",                icon: <CalendarDays size={15} /> },
       { id: "cs",            label: "Clientes",           icon: <HeartHandshake size={15} /> },
       { id: "projects",      label: "Projetos",           icon: <Briefcase size={15} /> },
+      { id: "saber",         label: "Saber",              icon: <GraduationCap size={15} /> },
+      { id: "ter",           label: "Ter",                icon: <Box size={15} /> },
+      { id: "executar",      label: "Executar",           icon: <Settings size={15} /> },
       { id: "products",      label: "Produtos",           icon: <Package size={15} /> },
       { id: "checkins",      label: "Inteligência",       icon: <ClipboardList size={15} /> },
       { id: "wa-cs",         label: "WhatsApp CS",        icon: <MessageCircle size={15} /> },
@@ -200,6 +203,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   {groupItems.map((item) => {
                     const isActive = currentPage === item.id;
                     const showSub = item.id === "projects" && (isActive || projectsSetor !== "");
+                    const stepColor = item.id === "saber" ? "#8b5cf6" : item.id === "ter" ? "#06b6d4" : item.id === "executar" ? "#22c55e" : null;
                     return (
                       <div key={item.id}>
                         <button
@@ -215,12 +219,15 @@ export function AppLayout({ children }: AppLayoutProps) {
                         >
                           {/* Active indicator */}
                           {isActive && (
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-primary" />
+                            <span
+                              className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
+                              style={{ backgroundColor: stepColor ?? "hsl(var(--primary))" }}
+                            />
                           )}
-                          <span className={isActive ? "text-white" : "text-white/30"}>
+                          <span style={isActive && stepColor ? { color: stepColor } : undefined} className={!stepColor || !isActive ? (isActive ? "text-white" : "text-white/30") : undefined}>
                             {item.icon}
                           </span>
-                          <span className="flex-1">{item.label}</span>
+                          <span className="flex-1" style={isActive && stepColor ? { color: stepColor } : undefined}>{item.label}</span>
                           {"badge" in item && (item as NavItem).badge != null && (item as NavItem).badge! > 0 && (
                             <span className="w-5 h-5 rounded-full bg-primary text-[10px] font-bold flex items-center justify-center text-white flex-shrink-0">
                               {(item as NavItem).badge! > 9 ? "9+" : (item as NavItem).badge}

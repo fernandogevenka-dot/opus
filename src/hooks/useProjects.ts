@@ -47,6 +47,15 @@ export interface Project {
   taxa_conversao?: number;
   proposta_apresentada?: string;
   noco_updated_at?: string;
+  billing_type?: "recurring" | "one_time";
+  fase_ter?: string | null;
+  fase_saber?: string | null;
+  // Campos de ritmo Saber (espelho do Notion)
+  inicio_realizado?: string | null;
+  fim_realizado?: string | null;
+  proxima_entrega?: string | null;
+  semana_atual?: number | null;
+  semana_ritmo?: number | null;
   created_at: string;
   updated_at: string;
   // Joined
@@ -84,7 +93,6 @@ export type ProjectMomento =
   | "♾️ Ongoing"
   | "🛫 Onboarding"
   | "⚙️ Implementação"
-  | "⏰ Atrasado"
   | "⏳ A Iniciar"
   | "⏳ Aviso Prévio"
   | "💲 Pausado - Financeiro"
@@ -96,11 +104,10 @@ export type ProjectMomento =
   | "⏸️ Inativo";
 
 export const MOMENTO_LABELS: ProjectMomento[] = [
-  "♾️ Ongoing",
+  "⏳ A Iniciar",
   "🛫 Onboarding",
   "⚙️ Implementação",
-  "⏰ Atrasado",
-  "⏳ A Iniciar",
+  "♾️ Ongoing",
   "⏳ Aviso Prévio",
   "💲 Pausado - Financeiro",
   "🟡 Concluído - Negociação",
@@ -112,12 +119,12 @@ export const MOMENTO_LABELS: ProjectMomento[] = [
 ];
 
 export const ACTIVE_MOMENTOS: ProjectMomento[] = [
-  "♾️ Ongoing",
+  "⏳ A Iniciar",
   "🛫 Onboarding",
   "⚙️ Implementação",
-  "⏰ Atrasado",
-  "⏳ A Iniciar",
+  "♾️ Ongoing",
   "⏳ Aviso Prévio",
+  "💲 Pausado - Financeiro",
 ];
 
 export const PRODUTOS_LIST = [
@@ -212,6 +219,15 @@ export function useProjects() {
     setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, momento } : p)));
   }, []);
 
+  const updateFase = useCallback(async (id: string, field: "fase_ter" | "fase_saber", value: string | null) => {
+    const { error: err } = await supabase
+      .from("projects")
+      .update({ [field]: value, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (err) throw err;
+    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+  }, []);
+
   // Aggregated stats
   const stats = {
     total: projects.length,
@@ -234,5 +250,6 @@ export function useProjects() {
     saveProject,
     deleteProject,
     updateMomento,
+    updateFase,
   };
 }

@@ -24,6 +24,9 @@ import { UserApprovalPage } from "@/pages/UserApprovalPage";
 import { FeatureRequestsPage } from "@/pages/FeatureRequestsPage";
 import { GTMCockpitPage } from "@/pages/GTMCockpitPage";
 import { MBRPage } from "@/pages/MBRPage";
+import { SaberPage } from "@/pages/SaberPage";
+import { TerPage } from "@/pages/TerPage";
+import { ExecutarPage } from "@/pages/ExecutarPage";
 
 function LoadingScreen() {
   return (
@@ -63,6 +66,9 @@ function PageRouter() {
     case "feature-requests": return <FeatureRequestsPage />;
     case "gtm-cockpit":      return <GTMCockpitPage />;
     case "mbr":              return <MBRPage />;
+    case "saber":            return <SaberPage />;
+    case "ter":              return <TerPage />;
+    case "executar":         return <ExecutarPage />;
     default:                 return <OfficePage />;
   }
 }

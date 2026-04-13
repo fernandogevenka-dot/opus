@@ -4,7 +4,6 @@ import {
   useProjects,
   MOMENTO_LABELS,
   ACTIVE_MOMENTOS,
-  PRODUTOS_LIST,
   type Project,
   type ProjectFormData,
   type ProjectMomento,
@@ -100,10 +99,19 @@ function getSetorMetric(project: Project, setorId: SetorId | ""): number {
   }
 }
 
-/** Retorna o id do setor de um projeto baseado nos produtos */
+/** Retorna o id do setor de um projeto.
+ *  Prioridade: campo `step` (importado do NocoDB) > produtos mapeados */
 function getProjectSetor(project: Project): SetorId | null {
+  // 1. Usar campo step diretamente (vem do NocoDB)
+  if (project.step) {
+    const s = project.step.toLowerCase();
+    if (s === "saber")         return "saber";
+    if (s === "ter")           return "ter";
+    if (s === "executar")      return "executar";
+    if (s === "potencializar") return "potencializar";
+  }
+  // 2. Fallback: identificar via produtos cadastrados
   const produtos = project.produtos ?? [];
-  // Tenta identificar via primeiro produto
   for (const p of produtos) {
     const cat = getCategoryForProduct(p);
     if (cat) return cat.id as SetorId;
@@ -415,6 +423,483 @@ function KanbanColumn({ title, projects, filterSetor, isInactive, onCardClick, o
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Fases Kanban STEP ────────────────────────────────────────────────────────
+
+export const FASES_TER: string[] = [
+  "Onboarding",
+  "Desenvolvimento Preview",
+  "Apresentação do Preview",
+  "Ajustes Preview",
+  "Aprovação",
+  "Desenvolvimento",
+  "Revisão",
+  "Apresentação Final",
+  "Passar pra Hospedagem",
+  "Concluído",
+  "Cancelado / Jurídico",
+];
+
+export const FASES_SABER: string[] = [
+  "00 - Aguardando / Follow-up",
+  "01 - Onboarding",
+  "02 - Diagnóstico de Criatividade",
+  "03 - Diagnóstico Comercial",
+  "04 - Estratégica de Mkt & Vendas",
+  "05 - Entregáveis + Pitch",
+  "Concluído - Em negociação",
+  "Expansão (assinado)",
+  "Hand-off",
+  "Concluído - Finalizado",
+  "Concluído - Churn",
+  "Concluído - Reembolso",
+  "Concluído - Venda bookada",
+];
+
+// ─── Status de ritmo Saber (replica fórmula Notion) ──────────────────────────
+
+export interface SaberRitmoStatus {
+  label: string;
+  emoji: string;
+  color: string;
+  bg: string;
+}
+
+export function calcSaberRitmo(project: Project): SaberRitmoStatus | null {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const toDate = (s: string | null | undefined) => {
+    if (!s) return null;
+    const d = new Date(s);
+    d.setHours(0, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const fimRealizado    = toDate(project.fim_realizado);
+  const inicioRealizado = toDate(project.inicio_realizado);
+  const inicioContrato  = toDate(project.start_date);
+  const proximaEntrega  = toDate(project.proxima_entrega);
+  const semanaAtual     = project.semana_atual ?? null;
+  const semanaRitmo     = project.semana_ritmo ?? null;
+
+  // 1. Churn m0: encerrou no mesmo dia que iniciou
+  if (fimRealizado && inicioContrato && fimRealizado.getTime() === inicioContrato.getTime()) {
+    return { label: "Churn m0", emoji: "💀", color: "#ef4444", bg: "#ef444418" };
+  }
+
+  // 2. Encerrado normalmente
+  if (fimRealizado) return null;
+
+  // 3. Projeto iniciado (inicio_realizado preenchido)
+  if (inicioRealizado) {
+    if (!proximaEntrega) {
+      return { label: "Atenção à próxima entrega", emoji: "⚠️", color: "#f59e0b", bg: "#f59e0b18" };
+    }
+    const diasEntrega = Math.floor((proximaEntrega.getTime() - hoje.getTime()) / 86400000);
+    if (diasEntrega < 0) {
+      return { label: "Atenção à próxima entrega", emoji: "🚨", color: "#ef4444", bg: "#ef444418" };
+    }
+    if (diasEntrega <= 1) {
+      return { label: "Se prepare para a próxima entrega", emoji: "🟠", color: "#f97316", bg: "#f9731618" };
+    }
+    // Semana atual vs ritmo
+    if (semanaAtual !== null && semanaRitmo !== null) {
+      if (semanaAtual > semanaRitmo)  return { label: "Atrasado",  emoji: "🔴", color: "#ef4444", bg: "#ef444418" };
+      if (semanaAtual < semanaRitmo)  return { label: "Adiantado", emoji: "🔵", color: "#3b82f6", bg: "#3b82f618" };
+      return { label: "No ritmo", emoji: "🟢", color: "#22c55e", bg: "#22c55e18" };
+    }
+    return null;
+  }
+
+  // 4. Projeto não iniciado ainda
+  if (!inicioRealizado && inicioContrato) {
+    const diasSemInicio = Math.floor((hoje.getTime() - inicioContrato.getTime()) / 86400000);
+    if (diasSemInicio >= 0) {
+      if (diasSemInicio >= 7) {
+        return { label: "Sem onboarding +7d", emoji: "🚨", color: "#ef4444", bg: "#ef444418" };
+      }
+      return { label: "Bora agendar kickoff", emoji: "🔶", color: "#f59e0b", bg: "#f59e0b18" };
+    }
+  }
+
+  // Sem dados suficientes para calcular
+  if (semanaAtual !== null && semanaRitmo !== null) {
+    if (semanaAtual > semanaRitmo)  return { label: "Atrasado",  emoji: "🔴", color: "#ef4444", bg: "#ef444418" };
+    if (semanaAtual < semanaRitmo)  return { label: "Adiantado", emoji: "🔵", color: "#3b82f6", bg: "#3b82f618" };
+    return { label: "No ritmo", emoji: "🟢", color: "#22c55e", bg: "#22c55e18" };
+  }
+
+  return null;
+}
+
+// Fases encerradas (não aparecem nas colunas ativas)
+const TER_ENCERRADAS = new Set(["Concluído", "Cancelado / Jurídico"]);
+const SABER_ENCERRADAS = new Set([
+  "Concluído - Em negociação",
+  "Expansão (assinado)",
+  "Concluído - Finalizado",
+  "Concluído - Churn",
+  "Concluído - Reembolso",
+  "Concluído - Venda bookada",
+  "Hand-off",
+]);
+
+// Cor de destaque para a fase
+function getFaseColor(fase: string | null | undefined, tipo: "ter" | "saber"): string {
+  if (!fase) return "#6b7280";
+  const encerradas = tipo === "ter" ? TER_ENCERRADAS : SABER_ENCERRADAS;
+  if (encerradas.has(fase)) return "#6b7280";
+  if (fase.includes("Concluído") || fase.includes("Aprovação")) return "#10b981";
+  if (fase.includes("Apresentação") || fase.includes("Pitch") || fase.includes("Diagnóstico")) return "#f59e0b";
+  if (fase.includes("Onboarding") || fase.includes("Aguardando")) return "#8b5cf6";
+  if (fase.includes("Desenvolvimento") || fase.includes("Entregáveis")) return "#06b6d4";
+  if (fase.includes("Ajustes") || fase.includes("Revisão")) return "#ef4444";
+  if (fase.includes("Expansão") || fase.includes("Hand-off")) return "#22c55e";
+  return "#6b7280";
+}
+
+// ─── Step Kanban Card ─────────────────────────────────────────────────────────
+
+interface StepKanbanCardProps {
+  project: Project;
+  faseField: "fase_ter" | "fase_saber";
+  fases: string[];
+  tipo: "ter" | "saber";
+  onFaseChange: (id: string, field: "fase_ter" | "fase_saber", value: string) => Promise<void>;
+  onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function StepKanbanCard({ project, faseField, fases, tipo, onFaseChange, onClick, onEdit, onDelete }: StepKanbanCardProps) {
+  const [showActions, setShowActions] = useState(false);
+  const [changingFase, setChangingFase] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fase = project[faseField] ?? null;
+  const faseColor = getFaseColor(fase, tipo);
+
+  async function handleFaseChange(newFase: string) {
+    setSaving(true);
+    await onFaseChange(project.id, faseField, newFase);
+    setSaving(false);
+    setChangingFase(false);
+  }
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      className="glass rounded-xl p-3 cursor-pointer group relative flex flex-col gap-2 border border-border/30"
+      style={{ borderLeftWidth: 3, borderLeftColor: faseColor }}
+      onClick={onClick}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => { setShowActions(false); setChangingFase(false); }}
+    >
+      {/* Actions overlay */}
+      <AnimatePresence>
+        {showActions && !changingFase && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-2 right-2 flex gap-1 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-primary/20 hover:text-primary flex items-center justify-center transition-colors"
+            >
+              <Edit2 size={11} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-destructive/20 hover:text-destructive flex items-center justify-center transition-colors"
+            >
+              <Trash2 size={11} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Project name */}
+      <p className="text-sm font-semibold leading-snug truncate pr-8">{project.name}</p>
+
+      {/* Client + Squad */}
+      <p className="text-[11px] text-muted-foreground truncate">
+        {project.client_name ?? "—"}
+        {project.squad_name && <> · {project.squad_name}</>}
+      </p>
+
+      {/* Fase picker */}
+      <div onClick={(e) => e.stopPropagation()}>
+        {!changingFase ? (
+          <button
+            onClick={() => setChangingFase(true)}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all hover:opacity-80 w-full"
+            style={{
+              color: faseColor,
+              borderColor: faseColor + "40",
+              backgroundColor: faseColor + "15",
+            }}
+            title="Clique para alterar fase"
+          >
+            {saving ? (
+              <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: faseColor }} />
+            )}
+            <span className="truncate flex-1 text-left">{fase ?? "— sem fase —"}</span>
+            <ChevronDown size={10} className="flex-shrink-0 opacity-60" />
+          </button>
+        ) : (
+          <div className="relative">
+            <select
+              autoFocus
+              className="w-full bg-background border border-primary/40 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/50"
+              defaultValue={fase ?? ""}
+              onChange={(e) => handleFaseChange(e.target.value)}
+              onBlur={() => setChangingFase(false)}
+            >
+              <option value="" disabled>Selecione a fase...</option>
+              {fases.map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Ritmo Saber + próxima entrega */}
+      {tipo === "saber" && (() => {
+        const ritmo = calcSaberRitmo(project);
+        const proxEntrega = project.proxima_entrega;
+        const semana = project.semana_atual != null && project.semana_ritmo != null
+          ? `Semana ${project.semana_atual} de ${project.semana_ritmo}`
+          : null;
+        return (
+          <div className="flex flex-col gap-1">
+            {ritmo && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold w-fit"
+                style={{ color: ritmo.color, backgroundColor: ritmo.bg }}
+              >
+                {ritmo.emoji} {ritmo.label}
+              </span>
+            )}
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              {proxEntrega && (
+                <span title="Próxima entrega">
+                  📅 {new Date(proxEntrega).toLocaleDateString("pt-BR")}
+                </span>
+              )}
+              {semana && <span>{semana}</span>}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MRR / Valor */}
+      {(project.mrr ?? 0) > 0 && (
+        <span className="text-[10px] font-semibold text-green-500">
+          {formatMRR(project.mrr)} MRR
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
+// ─── Step Kanban Column ───────────────────────────────────────────────────────
+
+interface StepKanbanColumnProps {
+  fase: string;
+  projects: Project[];
+  faseField: "fase_ter" | "fase_saber";
+  fases: string[];
+  tipo: "ter" | "saber";
+  isEncerrada?: boolean;
+  onFaseChange: (id: string, field: "fase_ter" | "fase_saber", value: string) => Promise<void>;
+  onCardClick: (p: Project) => void;
+  onEdit: (p: Project) => void;
+  onDelete: (p: Project) => void;
+}
+
+function StepKanbanColumn({ fase, projects, faseField, fases, tipo, isEncerrada, onFaseChange, onCardClick, onEdit, onDelete }: StepKanbanColumnProps) {
+  const color = getFaseColor(fase, tipo);
+  const totalMRR = projects.reduce((s, p) => s + (p.mrr ?? 0), 0);
+
+  return (
+    <div className="flex flex-col gap-2 min-w-[220px] w-[220px] flex-shrink-0">
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: color }}
+          />
+          <span
+            className={`text-xs font-semibold truncate max-w-[140px] ${isEncerrada ? "text-muted-foreground" : ""}`}
+            style={isEncerrada ? undefined : { color }}
+            title={fase}
+          >
+            {fase}
+          </span>
+          <span
+            className="text-[10px] font-medium rounded-full px-1.5 py-0.5 border flex-shrink-0"
+            style={{
+              color,
+              backgroundColor: color + "18",
+              borderColor: color + "40",
+            }}
+          >
+            {projects.length}
+          </span>
+        </div>
+        {totalMRR > 0 && (
+          <span className="text-[10px] text-muted-foreground font-medium">{formatMRR(totalMRR)}</span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 flex-1 min-h-[60px]">
+        <AnimatePresence mode="popLayout">
+          {projects.map((p) => (
+            <StepKanbanCard
+              key={p.id}
+              project={p}
+              faseField={faseField}
+              fases={fases}
+              tipo={tipo}
+              onFaseChange={onFaseChange}
+              onClick={() => onCardClick(p)}
+              onEdit={() => onEdit(p)}
+              onDelete={() => onDelete(p)}
+            />
+          ))}
+        </AnimatePresence>
+        {projects.length === 0 && (
+          <div className="rounded-xl border-2 border-dashed border-border/30 p-4 text-center">
+            <p className="text-xs text-muted-foreground/40">Nenhum projeto</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Step Kanban Board ────────────────────────────────────────────────────────
+
+interface StepKanbanBoardProps {
+  projects: Project[];
+  tipo: "ter" | "saber";
+  onFaseChange: (id: string, field: "fase_ter" | "fase_saber", value: string) => Promise<void>;
+  onCardClick: (p: Project) => void;
+  onEdit: (p: Project) => void;
+  onDelete: (p: Project) => void;
+}
+
+export function StepKanbanBoard({ projects, tipo, onFaseChange, onCardClick, onEdit, onDelete }: StepKanbanBoardProps) {
+  const fases = tipo === "ter" ? FASES_TER : FASES_SABER;
+  const faseField: "fase_ter" | "fase_saber" = tipo === "ter" ? "fase_ter" : "fase_saber";
+  const encerradas = tipo === "ter" ? TER_ENCERRADAS : SABER_ENCERRADAS;
+
+  // Projetos sem fase atribuída
+  const semFase = projects.filter((p) => !p[faseField]);
+
+  // Colunas ativas (não encerradas) com projetos
+  const activeCols = fases
+    .filter((f) => !encerradas.has(f))
+    .map((f) => ({ fase: f, projects: projects.filter((p) => p[faseField] === f) }))
+    .filter((c) => c.projects.length > 0);
+
+  // Colunas encerradas com projetos
+  const encerradasCols = fases
+    .filter((f) => encerradas.has(f))
+    .map((f) => ({ fase: f, projects: projects.filter((p) => p[faseField] === f) }))
+    .filter((c) => c.projects.length > 0);
+
+  const [showEncerradas, setShowEncerradas] = useState(false);
+
+  const allActiveCols = [
+    ...(semFase.length > 0 ? [{ fase: "— Sem fase —", projects: semFase, isEncerrada: false }] : []),
+    ...activeCols.map((c) => ({ ...c, isEncerrada: false })),
+  ];
+
+  return (
+    <div className="flex flex-col h-full gap-3">
+      {/* Kanban ativo */}
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+        <div className="flex gap-3 h-full pb-2 px-0.5" style={{ minWidth: "max-content" }}>
+          {allActiveCols.map((col) => (
+            <div key={col.fase} className="flex flex-col h-full overflow-y-auto">
+              <StepKanbanColumn
+                fase={col.fase}
+                projects={col.projects}
+                faseField={faseField}
+                fases={fases}
+                tipo={tipo}
+                isEncerrada={col.isEncerrada}
+                onFaseChange={onFaseChange}
+                onCardClick={onCardClick}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            </div>
+          ))}
+          {allActiveCols.length === 0 && (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <p className="text-sm font-medium mb-1">Nenhum projeto neste setor</p>
+                <p className="text-xs opacity-60">Adicione projetos ou ajuste os filtros</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Encerrados toggle */}
+      {encerradasCols.length > 0 && (
+        <div className="flex-shrink-0">
+          <button
+            onClick={() => setShowEncerradas((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+          >
+            {showEncerradas ? <ChevronDown size={12} /> : <ChevronDown size={12} className="-rotate-90" />}
+            {encerradasCols.reduce((s, c) => s + c.projects.length, 0)} projeto(s) encerrado(s) / arquivado(s)
+          </button>
+          <AnimatePresence>
+            {showEncerradas && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex gap-3 overflow-x-auto pb-2" style={{ minWidth: "max-content" }}>
+                  {encerradasCols.map((col) => (
+                    <StepKanbanColumn
+                      key={col.fase}
+                      fase={col.fase}
+                      projects={col.projects}
+                      faseField={faseField}
+                      fases={fases}
+                      tipo={tipo}
+                      isEncerrada
+                      onFaseChange={onFaseChange}
+                      onCardClick={onCardClick}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }
@@ -1951,7 +2436,7 @@ type ViewMode = "kanban" | "list";
 type PageTab = "projects" | "catalog";
 
 export function ProjectsPage() {
-  const { projects, loading, error, stats, saveProject, deleteProject } = useProjects();
+  const { projects, loading, error, stats, saveProject, deleteProject, updateFase } = useProjects();
   const clients = useClientOptions();
   const squads = useSquadOptions();
 
@@ -1966,6 +2451,8 @@ export function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [filterMomento, setFilterMomento] = useState<string>("");
   const [filterSquad, setFilterSquad] = useState<string>("");
+  // Inativos ocultos por padrão
+  const [showInactive, setShowInactive] = useState(false);
 
   // filterSetor is driven by sidebar; local pills also write to the store
   const filterSetor = projectsSetor as SetorId | "";
@@ -1982,9 +2469,19 @@ export function ProjectsPage() {
     return Array.from(names).sort() as string[];
   }, [projects]);
 
+  // Conta inativos antes de filtrar (para exibir no toggle)
+  const inactiveCount = useMemo(
+    () => projects.filter((p) => !ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length,
+    [projects]
+  );
+
   // Filtered projects
   const filtered = useMemo(() => {
     return projects.filter((p) => {
+      // Oculta inativos/encerrados por padrão
+      const isInative = !ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento);
+      if (!showInactive && isInative) return false;
+
       const q = search.toLowerCase();
       const matchSearch =
         !q ||
@@ -2002,7 +2499,7 @@ export function ProjectsPage() {
       })();
       return matchSearch && matchMomento && matchSquad && matchSetor;
     });
-  }, [projects, search, filterMomento, filterSquad, filterSetor]);
+  }, [projects, search, filterMomento, filterSquad, filterSetor, showInactive]);
 
   // Stats dinâmicas baseadas no filtro atual
   const filteredStats = useMemo(() => {
@@ -2247,6 +2744,25 @@ export function ProjectsPage() {
                   </button>
                 )}
               </div>
+              {/* Toggle inativos */}
+              <button
+                onClick={() => setShowInactive((v) => !v)}
+                className={`flex items-center gap-1.5 h-11 px-3 rounded-2xl border text-xs font-medium transition-all flex-shrink-0 ${
+                  showInactive
+                    ? "bg-secondary text-foreground border-border/80 shadow-sm"
+                    : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border/80"
+                }`}
+                title={showInactive ? "Ocultar inativos/encerrados" : "Mostrar inativos/encerrados"}
+              >
+                {showInactive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                <span>Inativos</span>
+                {inactiveCount > 0 && (
+                  <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${showInactive ? "bg-foreground/10" : "bg-muted-foreground/20"}`}>
+                    {inactiveCount}
+                  </span>
+                )}
+              </button>
+
               {/* View toggle */}
               <div className="flex items-center gap-0.5 bg-background border border-border/50 rounded-2xl p-0.5 shadow-sm h-11 px-1 flex-shrink-0">
                 <button
@@ -2339,7 +2855,25 @@ export function ProjectsPage() {
       {!loading && !error && (
         <div className="flex-1 min-h-0 overflow-hidden">
           <AnimatePresence mode="wait">
-            {viewMode === "kanban" ? (
+            {/* ── Step Kanban para Ter e Saber ── */}
+            {viewMode === "kanban" && (filterSetor === "ter" || filterSetor === "saber") ? (
+              <motion.div
+                key={`step-kanban-${filterSetor}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full"
+              >
+                <StepKanbanBoard
+                  projects={filtered}
+                  tipo={filterSetor as "ter" | "saber"}
+                  onFaseChange={updateFase}
+                  onCardClick={openDetail}
+                  onEdit={openEdit}
+                  onDelete={(p) => setDeleteConfirm(p)}
+                />
+              </motion.div>
+            ) : viewMode === "kanban" ? (
               <motion.div
                 key="kanban"
                 initial={{ opacity: 0 }}
