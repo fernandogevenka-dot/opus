@@ -8,16 +8,56 @@ export function useAuth() {
     useAuthStore();
 
   useEffect(() => {
-    // Listen for auth changes FIRST (captures the OAuth redirect callback)
+    let cancelled = false;
+
+    // Safety timeout — unblock loading after 8s no matter what
+    const safetyTimer = setTimeout(() => {
+      console.warn("[OPUS] safety timeout — forcing setLoading(false)");
+      if (!cancelled) setLoading(false);
+    }, 8000);
+
+    // Step 1: Eagerly restore session from storage on mount.
+    // This avoids the flash-to-login on reload in Tauri WebView.
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log("[OPUS] getSession:", session?.user?.email ?? "no session");
+      if (cancelled) return;
+      if (session?.user) {
+        setSession(session);
+        try {
+          await upsertAndFetchUser(session);
+        } catch (err) {
+          console.error("[OPUS] upsertAndFetchUser (getSession) failed:", err);
+          setUser({
+            id: session.user.id,
+            email: session.user.email ?? "",
+            name: session.user.user_metadata?.full_name ?? session.user.email ?? "",
+            avatar_url: session.user.user_metadata?.avatar_url ?? "",
+            opus_role: "pending",
+            approval_status: "pending",
+          } as import("@/types").User);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      } else {
+        // No session — show login immediately, don't wait for onAuthStateChange
+        if (!cancelled) setLoading(false);
+      }
+    });
+
+    // Step 2: Listen for auth changes (captures OAuth callback + token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("[OPUS] onAuthStateChange:", event, session?.user?.email);
+      if (cancelled) return;
+
+      // Ignore INITIAL_SESSION — already handled by getSession above
+      if (event === "INITIAL_SESSION") return;
+
       setSession(session);
       if (session?.user) {
         try {
           await upsertAndFetchUser(session);
         } catch (err) {
           console.error("[OPUS] upsertAndFetchUser failed:", err);
-          // Fallback: set a minimal user so the app doesn't stay on login screen
           setUser({
             id: session.user.id,
             email: session.user.email ?? "",
@@ -29,30 +69,12 @@ export function useAuth() {
         }
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false); // ALWAYS unblock loading, even if upsert fails
-    });
-
-    // Safety timeout — unblock loading after 8s no matter what
-    const safetyTimer = setTimeout(() => {
-      console.warn("[OPUS] safety timeout — forcing setLoading(false)");
-      setLoading(false);
-    }, 8000);
-
-    // Normal page load — check for existing session.
-    // setLoading(false) ALWAYS runs here so the app never hangs on the
-    // loading screen when there is already a valid session in localStorage.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("[OPUS] getSession:", session?.user?.email ?? "no session");
-      // onAuthStateChange will handle the full upsert; we just unblock loading
-      // here in case it fires before or in parallel.
-      if (!session) setLoading(false);
-      // When there IS a session, loading is unblocked inside onAuthStateChange
-      // (after upsertAndFetchUser). Safety timeout below still guards against
-      // any failure.
     });
 
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
       clearTimeout(safetyTimer);
     };

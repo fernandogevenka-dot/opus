@@ -92,9 +92,10 @@ export function useCustomerSuccess() {
   const { user } = useAuthStore();
 
   useEffect(() => {
+    if (!user) return;
     loadClients();
     loadFilterOptions();
-  }, [filters]);
+  }, [filters, user?.id]);
 
   async function loadClients() {
     setLoading(true);
