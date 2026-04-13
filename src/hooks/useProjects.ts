@@ -48,6 +48,8 @@ export interface Project {
   proposta_apresentada?: string;
   noco_updated_at?: string;
   billing_type?: "recurring" | "one_time";
+  contract_duration?: string | null;
+  desconto_total?: number | null;
   fase_ter?: string | null;
   fase_saber?: string | null;
   // Campos de ritmo Saber (espelho do Notion)
@@ -79,6 +81,10 @@ export interface ProjectFormData {
   usa?: boolean;
   start_date?: string;
   end_date?: string;
+  // Duração do contrato (substitui end_date manual): "one_time" | "6" | "12"
+  contract_duration?: string;
+  // Desconto total aplicado nos produtos (valor absoluto)
+  desconto_total?: number;
   produtos?: string[];
   pasta_publica?: string;
   pasta_privada?: string;

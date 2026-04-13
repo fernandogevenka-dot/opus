@@ -1249,6 +1249,8 @@ const EMPTY_FORM: ProjectFormData = {
   usa: false,
   start_date: undefined,
   end_date: undefined,
+  contract_duration: undefined,
+  desconto_total: undefined,
   produtos: [],
   pasta_publica: undefined,
   pasta_privada: undefined,
@@ -1279,6 +1281,8 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
       usa: project.usa ?? false,
       start_date: project.start_date ? project.start_date.slice(0, 10) : undefined,
       end_date: project.end_date ? project.end_date.slice(0, 10) : undefined,
+      contract_duration: project.contract_duration ?? undefined,
+      desconto_total: project.desconto_total ?? undefined,
       produtos: project.produtos ?? [],
       pasta_publica: project.pasta_publica,
       pasta_privada: project.pasta_privada,
@@ -1292,14 +1296,24 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prodSearch, setProdSearch] = useState("");
-  const [prodCat, setProdCat]       = useState<string>("all");
 
-  // Mapa produto → valor negociado (inicializado a partir do projeto existente)
+  // Membros do squad selecionado (para selects de gestor)
+  const [squadMembers, setSquadMembers] = useState<{ id: string; name: string; role?: string }[]>([]);
+  useEffect(() => {
+    if (!form.squad_id) { setSquadMembers([]); return; }
+    supabase
+      .from("collaborators")
+      .select("id, name, role")
+      .eq("squad_id", form.squad_id)
+      .order("name")
+      .then(({ data }) => setSquadMembers(data ?? []));
+  }, [form.squad_id]);
+
+  // Mapa produto → valor negociado
   const [produtoValores, setProdutoValores] = useState<Record<string, number>>(() => {
     if (!project) return {};
     const map: Record<string, number> = {};
     const prods = project.produtos ?? [];
-    // distribui mrr/investimento igualmente pelos produtos existentes como ponto de partida
     if (prods.length === 1) {
       const p = activeProducts.find((a) => a.name === prods[0]);
       if (p) map[prods[0]] = p.billing_type === "recurring" ? (project.mrr ?? 0) : (project.investimento ?? 0);
@@ -1318,7 +1332,6 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
       setProdutoValores((v) => { const next = { ...v }; delete next[nome]; return next; });
     } else {
       set("produtos", [...cur, nome]);
-      // pré-preenche com preço padrão do catálogo
       const prod = activeProducts.find((p) => p.name === nome);
       if (prod && prod.default_price > 0) {
         setProdutoValores((v) => ({ ...v, [nome]: prod.default_price }));
@@ -1330,6 +1343,16 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
     setProdutoValores((v) => ({ ...v, [nome]: valor }));
   }
 
+  // Calcula end_date a partir de start_date + contract_duration
+  function calcEndDate(startDate: string | undefined, duration: string | undefined): string | undefined {
+    if (!startDate || !duration || duration === "one_time") return undefined;
+    const months = parseInt(duration, 10);
+    if (isNaN(months)) return undefined;
+    const d = new Date(startDate);
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().slice(0, 10);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -1339,22 +1362,31 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
     setSaving(true);
     setError(null);
 
-    // Calcular mrr e investimento a partir dos valores por produto
     const selectedProds = form.produtos ?? [];
-    let totalMrr = 0;
-    let totalInv = 0;
+    let totalMrr = 0, totalInv = 0, totalPadrao = 0;
     for (const nome of selectedProds) {
       const prod  = activeProducts.find((p) => p.name === nome);
       const valor = produtoValores[nome] ?? 0;
+      const padrao = prod?.default_price ?? 0;
+      totalPadrao += padrao;
       if (prod?.billing_type === "recurring") totalMrr += valor;
       else totalInv += valor;
     }
-    // Se não há produtos cadastrados no catálogo, usa os campos diretos do form
+    const valorNegociado = totalMrr + totalInv;
+    const desconto = totalPadrao > valorNegociado ? totalPadrao - valorNegociado : 0;
+
     const finalMrr = selectedProds.length > 0 && activeProducts.length > 0 ? (totalMrr || undefined) : form.mrr;
     const finalInv = selectedProds.length > 0 && activeProducts.length > 0 ? (totalInv || undefined) : form.investimento;
+    const finalEndDate = calcEndDate(form.start_date, form.contract_duration) ?? form.end_date;
 
     try {
-      await onSave({ ...form, mrr: finalMrr, investimento: finalInv }, project?.id);
+      await onSave({
+        ...form,
+        mrr: finalMrr,
+        investimento: finalInv,
+        end_date: finalEndDate,
+        desconto_total: desconto > 0 ? desconto : undefined,
+      }, project?.id);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar projeto");
@@ -1377,6 +1409,24 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
       </div>
     );
   }
+
+  // Resumo de desconto dos produtos selecionados
+  const prodSummary = (() => {
+    const selProds = form.produtos ?? [];
+    let sumMrr = 0, sumInv = 0, sumPadrao = 0;
+    for (const nome of selProds) {
+      const prod = activeProducts.find((p) => p.name === nome);
+      const val  = produtoValores[nome] ?? 0;
+      const pad  = prod?.default_price ?? 0;
+      sumPadrao += pad;
+      if (prod?.billing_type === "recurring") sumMrr += val;
+      else sumInv += val;
+    }
+    const negociado = sumMrr + sumInv;
+    const desconto  = sumPadrao > negociado ? sumPadrao - negociado : 0;
+    const pct       = sumPadrao > 0 ? Math.round((desconto / sumPadrao) * 100) : 0;
+    return { sumMrr, sumInv, sumPadrao, negociado, desconto, pct };
+  })();
 
   return (
     <AnimatePresence>
@@ -1409,7 +1459,8 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-5">
-            {/* Básico */}
+
+            {/* ── Informações Básicas ── */}
             <FormSection title="Informações Básicas">
               {/* Nome — full width */}
               <div className="col-span-2">
@@ -1438,26 +1489,6 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                 </select>
               </div>
 
-              {/* Squad */}
-              <div>
-                <label className={labelCls}>Squad</label>
-                <select
-                  className={inputCls}
-                  value={form.squad_id ?? ""}
-                  onChange={(e) => {
-                    const id = e.target.value || undefined;
-                    const name = squads.find((s) => s.id === id)?.name;
-                    set("squad_id", id);
-                    set("squad_name", name);
-                  }}
-                >
-                  <option value="">Selecione o squad</option>
-                  {squads.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-
               {/* Momento */}
               <div>
                 <label className={labelCls}>Momento</label>
@@ -1473,45 +1504,13 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                 </select>
               </div>
 
-              {/* Prioridade */}
-              <div>
-                <label className={labelCls}>Prioridade</label>
-                <select
-                  className={inputCls}
-                  value={form.prioridade ?? ""}
-                  onChange={(e) => set("prioridade", e.target.value || undefined)}
-                >
-                  <option value="">Selecione</option>
-                  <option value="Alta">Alta</option>
-                  <option value="Média">Média</option>
-                  <option value="Baixa">Baixa</option>
-                </select>
-              </div>
-
-              {/* Risco */}
-              <div>
-                <label className={labelCls}>Risco</label>
-                <select
-                  className={inputCls}
-                  value={form.risco ?? ""}
-                  onChange={(e) => set("risco", e.target.value || undefined)}
-                >
-                  <option value="">Selecione</option>
-                  <option value="Baixo">Baixo</option>
-                  <option value="Médio">Médio</option>
-                  <option value="Alto">Alto</option>
-                </select>
-              </div>
-
-              {/* USA */}
-              <div className="flex items-center gap-2 pt-5">
+              {/* USA — full width */}
+              <div className="col-span-2 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => set("usa", !form.usa)}
                   className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${
-                    form.usa
-                      ? "bg-violet-500 border-violet-500 text-white"
-                      : "border-border/60 bg-secondary/40"
+                    form.usa ? "bg-violet-500 border-violet-500 text-white" : "border-border/60 bg-secondary/40"
                   }`}
                 >
                   {form.usa && <Check size={11} />}
@@ -1522,54 +1521,65 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
               </div>
             </FormSection>
 
-            {/* Financeiro */}
-            <FormSection title="Financeiro">
-              <div>
-                <label className={labelCls}>MRR (R$)</label>
-                <input
-                  type="number"
-                  className={inputCls}
-                  placeholder="0"
-                  value={form.mrr ?? ""}
-                  onChange={(e) => set("mrr", e.target.value ? Number(e.target.value) : undefined)}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Investimento (R$)</label>
-                <input
-                  type="number"
-                  className={inputCls}
-                  placeholder="0"
-                  value={form.investimento ?? ""}
-                  onChange={(e) => set("investimento", e.target.value ? Number(e.target.value) : undefined)}
-                />
-              </div>
-            </FormSection>
-
-            {/* Equipe */}
+            {/* ── Equipe ── */}
             <FormSection title="Equipe">
+              {/* Squad */}
+              <div>
+                <label className={labelCls}>Squad</label>
+                <select
+                  className={inputCls}
+                  value={form.squad_id ?? ""}
+                  onChange={(e) => {
+                    const id = e.target.value || undefined;
+                    const name = squads.find((s) => s.id === id)?.name;
+                    set("squad_id", id);
+                    set("squad_name", name);
+                    set("gestor_projeto", undefined);
+                    set("gestor_trafego", undefined);
+                  }}
+                >
+                  <option value="">Selecione o squad</option>
+                  {squads.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Gestor de Projeto — select membros do squad */}
               <div>
                 <label className={labelCls}>Gestor de Projeto</label>
-                <input
+                <select
                   className={inputCls}
-                  placeholder="Nome do gestor"
                   value={form.gestor_projeto ?? ""}
                   onChange={(e) => set("gestor_projeto", e.target.value || undefined)}
-                />
+                  disabled={squadMembers.length === 0}
+                >
+                  <option value="">{squadMembers.length === 0 ? "Selecione um squad" : "Selecione"}</option>
+                  {squadMembers.map((m) => (
+                    <option key={m.id} value={m.name}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>
+                  ))}
+                </select>
               </div>
-              <div>
+
+              {/* Gestor de Tráfego — select membros do squad */}
+              <div className="col-span-2">
                 <label className={labelCls}>Gestor de Tráfego</label>
-                <input
+                <select
                   className={inputCls}
-                  placeholder="Nome do gestor"
                   value={form.gestor_trafego ?? ""}
                   onChange={(e) => set("gestor_trafego", e.target.value || undefined)}
-                />
+                  disabled={squadMembers.length === 0}
+                >
+                  <option value="">{squadMembers.length === 0 ? "Selecione um squad" : "Selecione"}</option>
+                  {squadMembers.map((m) => (
+                    <option key={m.id} value={m.name}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>
+                  ))}
+                </select>
               </div>
             </FormSection>
 
-            {/* Datas */}
-            <FormSection title="Datas">
+            {/* ── Datas e Duração ── */}
+            <FormSection title="Datas e Contrato">
               <div>
                 <label className={labelCls}>Data de Início</label>
                 <input
@@ -1580,17 +1590,26 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                 />
               </div>
               <div>
-                <label className={labelCls}>Data de Encerramento</label>
-                <input
-                  type="date"
+                <label className={labelCls}>Duração do Contrato</label>
+                <select
                   className={inputCls}
-                  value={form.end_date ?? ""}
-                  onChange={(e) => set("end_date", e.target.value || undefined)}
-                />
+                  value={form.contract_duration ?? ""}
+                  onChange={(e) => set("contract_duration", e.target.value || undefined)}
+                >
+                  <option value="">Sem prazo</option>
+                  <option value="one_time">One Time (sem renovação)</option>
+                  <option value="6">6 meses</option>
+                  <option value="12">12 meses</option>
+                </select>
+                {form.start_date && form.contract_duration && form.contract_duration !== "one_time" && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                    Encerra em: {new Date(calcEndDate(form.start_date, form.contract_duration)!).toLocaleDateString("pt-BR")}
+                  </p>
+                )}
               </div>
             </FormSection>
 
-            {/* Produtos */}
+            {/* ── Produtos ── */}
             <div>
               <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border/40">
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -1603,147 +1622,123 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
                 )}
               </div>
 
-              {/* Chips + totalizador dos produtos selecionados */}
-              {(form.produtos ?? []).length > 0 && (() => {
-                const selProds = form.produtos ?? [];
-                let sumMrr = 0, sumInv = 0;
-                for (const nome of selProds) {
-                  const prod = activeProducts.find((p) => p.name === nome);
-                  const val  = produtoValores[nome] ?? 0;
-                  if (prod?.billing_type === "recurring") sumMrr += val;
-                  else sumInv += val;
-                }
-                return (
-                  <div className="mb-3 space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      {selProds.map((p) => (
-                        <span
-                          key={p}
-                          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-primary/10 text-primary font-medium"
-                        >
-                          {p}
-                          {produtoValores[p] ? (
-                            <span className="text-primary/60 ml-0.5">{formatPrice(produtoValores[p])}</span>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => toggleProduto(p)}
-                            className="hover:text-red-400 transition-colors ml-0.5"
-                          >
-                            <X size={10} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    {(sumMrr > 0 || sumInv > 0) && (
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground px-1">
-                        {sumMrr > 0 && <span>MRR: <strong className="text-foreground">{formatPrice(sumMrr)}/mês</strong></span>}
-                        {sumInv > 0 && <span>One-time: <strong className="text-foreground">{formatPrice(sumInv)}</strong></span>}
+              {/* Produtos selecionados com valor e desconto */}
+              {(form.produtos ?? []).length > 0 && (
+                <div className="mb-4 space-y-1.5">
+                  {(form.produtos ?? []).map((nome) => {
+                    const prod     = activeProducts.find((p) => p.name === nome);
+                    const isRec    = prod?.billing_type === "recurring";
+                    const padrao   = prod?.default_price ?? 0;
+                    const negoc    = produtoValores[nome] ?? padrao;
+                    const descItem = padrao > negoc ? padrao - negoc : 0;
+                    const pctItem  = padrao > 0 ? Math.round((descItem / padrao) * 100) : 0;
+                    return (
+                      <div key={nome} className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium truncate">{nome}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                              style={{ color: isRec ? "#22c55e" : "#f59e0b", backgroundColor: isRec ? "#22c55e18" : "#f59e0b18" }}>
+                              {isRec ? "Recorrente" : "One-time"}
+                            </span>
+                          </div>
+                          {descItem > 0 && (
+                            <p className="text-[10px] text-orange-400/80 mt-0.5">
+                              Desconto: {formatPrice(descItem)} ({pctItem}% off — tabela {formatPrice(padrao)})
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-xs text-muted-foreground">R$</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={negoc || ""}
+                            placeholder={String(padrao || 0)}
+                            onChange={(e) => setProdutoValor(nome, parseFloat(e.target.value) || 0)}
+                            className="w-24 bg-background border border-border/60 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 text-right"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="text-[10px] text-muted-foreground/60">{isRec ? "/mês" : "único"}</span>
+                        </div>
+                        <button type="button" onClick={() => toggleProduto(nome)}
+                          className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0">
+                          <X size={12} />
+                        </button>
                       </div>
+                    );
+                  })}
+
+                  {/* Totalizador */}
+                  <div className="flex items-center justify-between px-1 pt-1 text-[11px] text-muted-foreground">
+                    <span>
+                      {prodSummary.sumMrr > 0 && <><strong className="text-foreground">{formatPrice(prodSummary.sumMrr)}/mês</strong></>}
+                      {prodSummary.sumMrr > 0 && prodSummary.sumInv > 0 && " + "}
+                      {prodSummary.sumInv > 0 && <><strong className="text-foreground">{formatPrice(prodSummary.sumInv)}</strong> one-time</>}
+                    </span>
+                    {prodSummary.desconto > 0 && (
+                      <span className="text-orange-400 font-medium">
+                        Desconto total: {formatPrice(prodSummary.desconto)} ({prodSummary.pct}%)
+                      </span>
                     )}
                   </div>
-                );
-              })()}
+                </div>
+              )}
 
+              {/* Busca para adicionar */}
               {activeProducts.length === 0 ? (
                 <p className="text-xs text-muted-foreground/60">
-                  Nenhum produto no catálogo ainda.{" "}
-                  <span className="text-primary">Cadastre produtos na aba "Catálogo de Produtos".</span>
+                  Nenhum produto no catálogo ainda.
                 </p>
               ) : (
                 <>
-                  {/* Busca + filtro de categoria */}
-                  <div className="flex gap-2 mb-3">
-                    <div className="relative flex-1">
-                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-                      <input
-                        type="text"
-                        placeholder="Buscar produto..."
-                        value={prodSearch}
-                        onChange={(e) => setProdSearch(e.target.value)}
-                        className="w-full pl-7 pr-3 py-1.5 text-xs bg-secondary/40 border border-border/60 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/40"
-                      />
-                    </div>
-                    <select
-                      value={prodCat}
-                      onChange={(e) => setProdCat(e.target.value)}
-                      className="text-xs bg-secondary/40 border border-border/60 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50 text-muted-foreground"
-                    >
-                      <option value="all">Todas</option>
-                      {PRODUCT_CATEGORIES.filter((cat) => activeProducts.some((p) => p.category === cat.id)).map((cat) => (
-                        <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
-                      ))}
-                    </select>
+                  <div className="relative mb-2">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                    <input
+                      type="text"
+                      placeholder="Adicionar produto..."
+                      value={prodSearch}
+                      onChange={(e) => setProdSearch(e.target.value)}
+                      className="w-full pl-7 pr-3 py-1.5 text-xs bg-secondary/40 border border-border/60 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/40"
+                    />
                   </div>
 
-                  {/* Lista filtrada */}
-                  {(() => {
+                  {prodSearch && (() => {
                     const q = prodSearch.toLowerCase().trim();
-                    const visible = activeProducts.filter((p) => {
-                      const matchCat = prodCat === "all" || p.category === prodCat;
-                      const matchQ   = !q || p.name.toLowerCase().includes(q);
-                      return matchCat && matchQ;
-                    });
+                    const visible = activeProducts.filter((p) =>
+                      p.name.toLowerCase().includes(q) && !(form.produtos ?? []).includes(p.name)
+                    );
                     if (visible.length === 0) {
-                      return <p className="text-xs text-muted-foreground/50 py-2 text-center">Nenhum produto encontrado</p>;
+                      return <p className="text-xs text-muted-foreground/50 py-1.5 text-center">Nenhum produto encontrado</p>;
                     }
                     return (
-                      <div className="space-y-1 max-h-52 overflow-y-auto pr-0.5">
+                      <div className="space-y-1 max-h-44 overflow-y-auto pr-0.5">
                         {visible.map((prod) => {
-                          const checked      = (form.produtos ?? []).includes(prod.name);
-                          const isRecurring  = prod.billing_type === "recurring";
+                          const isRec = prod.billing_type === "recurring";
                           return (
-                            <div
+                            <button
                               key={prod.id}
-                              className={`rounded-xl border transition-colors ${checked ? "border-primary/30 bg-primary/5" : "border-border/40 bg-secondary/20"}`}
+                              type="button"
+                              onClick={() => { toggleProduto(prod.name); setProdSearch(""); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-border/40 bg-secondary/20 hover:border-primary/30 hover:bg-primary/5 transition-colors text-left"
                             >
-                              <div className="flex items-center gap-2.5 px-3 py-2">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleProduto(prod.name)}
-                                  className={`w-4 h-4 rounded flex items-center justify-center border transition-colors flex-shrink-0 ${checked ? "bg-primary border-primary text-primary-foreground" : "border-border/60 bg-secondary/40"}`}
-                                >
-                                  {checked && <Check size={10} />}
-                                </button>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-sm font-medium">{prod.name}</span>
-                                    <span
-                                      className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-                                      style={{
-                                        color: isRecurring ? "#22c55e" : "#f59e0b",
-                                        backgroundColor: isRecurring ? "#22c55e18" : "#f59e0b18",
-                                      }}
-                                    >
-                                      {isRecurring ? "Recorrente" : "One-time"}
-                                    </span>
-                                  </div>
-                                  {prod.default_price > 0 && !checked && (
-                                    <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-                                      Padrão: {formatPrice(prod.default_price)}{isRecurring ? "/mês" : ""}
-                                    </p>
-                                  )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-medium truncate">{prod.name}</span>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                                    style={{ color: isRec ? "#22c55e" : "#f59e0b", backgroundColor: isRec ? "#22c55e18" : "#f59e0b18" }}>
+                                    {isRec ? "Recorrente" : "One-time"}
+                                  </span>
                                 </div>
-                                {checked && (
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <span className="text-xs text-muted-foreground">R$</span>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step={1}
-                                      placeholder={String(prod.default_price || 0)}
-                                      value={produtoValores[prod.name] ?? ""}
-                                      onChange={(e) => setProdutoValor(prod.name, parseFloat(e.target.value) || 0)}
-                                      className="w-24 bg-background border border-border/60 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 text-right"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                    <span className="text-[10px] text-muted-foreground/60">
-                                      {isRecurring ? "/mês" : "único"}
-                                    </span>
-                                  </div>
+                                {prod.default_price > 0 && (
+                                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                                    Tabela: {formatPrice(prod.default_price)}{isRec ? "/mês" : ""}
+                                  </p>
                                 )}
                               </div>
-                            </div>
+                              <Plus size={13} className="text-muted-foreground flex-shrink-0" />
+                            </button>
                           );
                         })}
                       </div>
