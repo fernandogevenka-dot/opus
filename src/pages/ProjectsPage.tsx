@@ -256,16 +256,27 @@ interface KanbanCardProps {
 function KanbanCard({ project, filterSetor, onClick, onEdit, onDelete }: KanbanCardProps) {
   const [showActions, setShowActions] = useState(false);
 
-  // Métrica principal conforme setor ativo
-  const metric = getSetorMetric(project, filterSetor);
-  const metricLabel = SETORES.find((s) => s.id === filterSetor)?.metricLabel ?? "MRR";
-
-  // Badge de setor do projeto
+  // Setor do projeto
   const projectSetor = getProjectSetor(project);
   const setorConfig = SETORES.find((s) => s.id === projectSetor);
 
+  // MRR
+  const mrr = project.mrr ?? 0;
+
+  // LT — meses desde start_date
+  const lt = (() => {
+    if (!project.start_date) return null;
+    const start = new Date(project.start_date);
+    const now = new Date();
+    const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+    return months > 0 ? months : null;
+  })();
+
   // Borda colorida para aviso prévio
   const isAvisoPrevio = project.momento === "⏳ Aviso Prévio";
+
+  // Nome curto do gestor (primeiro nome)
+  const gestor = project.gestor_projeto?.split(" ")[0] ?? null;
 
   return (
     <motion.div
@@ -273,8 +284,8 @@ function KanbanCard({ project, filterSetor, onClick, onEdit, onDelete }: KanbanC
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      className={`glass rounded-xl p-3 cursor-pointer group relative flex flex-col h-[130px] border ${
-        isAvisoPrevio ? "border-orange-400/40" : "border-border/30"
+      className={`glass rounded-xl p-3 cursor-pointer group relative flex flex-col gap-1 border ${
+        isAvisoPrevio ? "border-orange-400/50" : "border-border/30"
       }`}
       onClick={onClick}
       onMouseEnter={() => setShowActions(true)}
@@ -290,80 +301,60 @@ function KanbanCard({ project, filterSetor, onClick, onEdit, onDelete }: KanbanC
             className="absolute top-2 right-2 flex gap-1 z-10"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-primary/20 hover:text-primary flex items-center justify-center transition-colors"
-            >
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-primary/20 hover:text-primary flex items-center justify-center transition-colors">
               <Edit2 size={11} />
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-destructive/20 hover:text-destructive flex items-center justify-center transition-colors"
-            >
+            <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-destructive/20 hover:text-destructive flex items-center justify-center transition-colors">
               <Trash2 size={11} />
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Row 1: setor badge + USA */}
-      <div className="flex items-center gap-1 min-h-[16px]">
+      {/* Row 1: nome do cliente (destaque) */}
+      <p className="text-sm font-bold leading-tight truncate pr-6">
+        {project.client_name ?? project.name}
+      </p>
+
+      {/* Row 2: categoria · gestor · squad */}
+      <div className="flex items-center gap-1 flex-wrap">
         {setorConfig && (
-          <span
-            className="inline-flex items-center gap-0.5 text-[9px] font-semibold rounded px-1 py-0.5 border"
-            style={{
-              color: setorConfig.color,
-              backgroundColor: setorConfig.color + "18",
-              borderColor: setorConfig.color + "40",
-            }}
-          >
+          <span className="text-[9px] font-semibold rounded px-1 py-0.5 border"
+            style={{ color: setorConfig.color, backgroundColor: setorConfig.color + "15", borderColor: setorConfig.color + "35" }}>
             {setorConfig.icon} {setorConfig.label}
           </span>
         )}
-        {project.usa && (
-          <span className="text-[9px] font-semibold text-violet-500 bg-violet-500/10 border border-violet-500/20 rounded px-1 py-0.5">
-            🇺🇸
-          </span>
-        )}
-        {/* Risco badge no topo direito (quando sem actions) */}
-        {!showActions && project.risco && project.risco !== "Baixo" && project.risco !== "baixo" && (
-          <span className="ml-auto">
-            <RiscoBadge risco={project.risco} />
-          </span>
-        )}
+        {project.usa && <span className="text-[9px]">🇺🇸</span>}
+        <span className="text-[10px] text-muted-foreground truncate">
+          {gestor && <>{gestor}</>}
+          {project.squad_name && <span className="opacity-60"> · {project.squad_name}</span>}
+        </span>
       </div>
 
-      {/* Row 2: Project name */}
-      <p className="text-sm font-semibold leading-snug mt-1 truncate pr-2">{project.name}</p>
-
-      {/* Row 3: Client + Squad */}
-      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-        {project.client_name ?? "—"}
-        {project.squad_name && <> · {project.squad_name}</>}
-      </p>
+      {/* Row 3: nome do projeto (secundário, menor) */}
+      {project.client_name && project.client_name !== project.name && (
+        <p className="text-[10px] text-muted-foreground/60 truncate">{project.name}</p>
+      )}
 
       {/* Spacer */}
-      <div className="flex-1" />
+      <div className="flex-1 min-h-[4px]" />
 
-      {/* Row 4: métrica + produtos numa linha */}
-      <div className="flex items-center gap-2 mt-1">
-        {metric > 0 ? (
-          <span className="text-xs font-semibold text-green-600 dark:text-green-400">
-            {formatMRR(metric)}
-            {filterSetor && <span className="text-[9px] text-muted-foreground font-normal ml-0.5">{metricLabel}</span>}
+      {/* Row 4: MRR grande + LT */}
+      <div className="flex items-end justify-between gap-2">
+        {mrr > 0 ? (
+          <span className="text-base font-bold text-green-600 dark:text-green-400 leading-none">
+            {formatMRR(mrr)}
+            <span className="text-[9px] font-normal text-muted-foreground ml-0.5">MRR</span>
           </span>
         ) : (
           <span className="text-[10px] text-muted-foreground/40">sem MRR</span>
         )}
-        {project.produtos && project.produtos.length > 0 && (
-          <div className="flex items-center gap-1 ml-auto">
-            {project.produtos.slice(0, 1).map((p) => (
-              <ProdutoChip key={p} name={p} />
-            ))}
-            {project.produtos.length > 1 && (
-              <span className="text-[9px] text-muted-foreground">+{project.produtos.length - 1}</span>
-            )}
-          </div>
+        {lt && (
+          <span className="text-[10px] text-muted-foreground/70 leading-none flex-shrink-0">
+            {lt}m
+          </span>
         )}
       </div>
     </motion.div>
