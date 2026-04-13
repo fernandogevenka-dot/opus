@@ -209,7 +209,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                         <button
                           onClick={() => {
                             setCurrentPage(item.id as AppPage);
-                            if (item.id !== "projects") setProjectsSetor("");
+                            // Ao clicar em Projetos, limpa o setor para mostrar todos
+                            if (item.id === "projects") setProjectsSetor("");
+                            // Saber/Ter/Executar standalone não usam projectsSetor
+                            if (!["projects"].includes(item.id)) setProjectsSetor("");
                           }}
                           className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all text-left ${
                             isActive

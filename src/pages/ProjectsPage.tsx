@@ -2443,6 +2443,8 @@ export function ProjectsPage() {
   const [filterMomento, setFilterMomento] = useState<string>("");
   const [filterSquad, setFilterSquad] = useState<string>("");
   const [filterDupla, setFilterDupla] = useState<string>("");
+  // Filtro de mês — formato "YYYY-MM", vazio = mês atual
+  const [filterMes, setFilterMes] = useState<string>("");
   // Inativos ocultos por padrão
   const [showInactive, setShowInactive] = useState(false);
 
@@ -2494,41 +2496,77 @@ export function ProjectsPage() {
     });
   }, [projects, search, filterMomento, filterSquad, filterDupla, filterSetor, showInactive]);
 
-  // Stats dinâmicas baseadas no filtro atual
+  // Meses disponíveis para o filtro (baseado em start_date dos projetos)
+  const mesOptions = useMemo(() => {
+    const now = new Date();
+    const meses: { value: string; label: string }[] = [];
+    for (let i = 0; i < 13; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      meses.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    }
+    return meses;
+  }, []);
+
+  // Projetos ativos no mês selecionado (ou mês atual se vazio)
+  const filteredByMes = useMemo(() => {
+    const mesRef = filterMes || mesOptions[0]?.value;
+    if (!mesRef) return filtered;
+    const [year, month] = mesRef.split("-").map(Number);
+    const mesInicio = new Date(year, month - 1, 1);
+    const mesFim = new Date(year, month, 0, 23, 59, 59);
+    return filtered.filter((p) => {
+      if (!p.start_date) return false;
+      const start = new Date(p.start_date);
+      const end = p.end_date ? new Date(p.end_date) : p.churn_date ? new Date(p.churn_date) : null;
+      // Projeto estava ativo nesse mês: iniciou antes do fim do mês e não encerrou antes do início
+      return start <= mesFim && (!end || end >= mesInicio);
+    });
+  }, [filtered, filterMes, mesOptions]);
+
+  // Stats dinâmicas baseadas no filtro atual e setor
   const filteredStats = useMemo(() => {
-    const activeFiltered = filtered.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento));
-    const churnedFiltered = filtered.filter((p) => !!p.churn_date);
+    const base = filteredByMes;
+    const activeFiltered = base.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento));
+    const churnedFiltered = base.filter((p) => !!p.churn_date);
 
-    // Total de projetos (todos os do filtro atual)
-    const totalProjetos = filtered.length;
+    // KPIs adaptativos por setor:
+    // Executar → só MRR (receita recorrente)
+    // Saber    → Estruturação Estratégica (receita do projeto EE)
+    // Ter      → Investimento (receita do projeto one-time)
+    // Todos    → MRR + EE + Variável
+    let receitaLabel = "Receita";
+    let receitaTotal = 0;
+    if (filterSetor === "executar") {
+      receitaLabel = "MRR";
+      receitaTotal = activeFiltered.reduce((s, p) => s + (p.mrr ?? 0), 0);
+    } else if (filterSetor === "saber") {
+      receitaLabel = "Receita EE";
+      receitaTotal = base.reduce((s, p) => s + (p.estruturacao_estrategica ?? 0), 0);
+    } else if (filterSetor === "ter") {
+      receitaLabel = "Receita Projetos";
+      receitaTotal = base.reduce((s, p) => s + (p.investimento ?? 0) + (p.mrr ?? 0), 0);
+    } else {
+      receitaLabel = "Receita Total";
+      receitaTotal = base.reduce((s, p) => s + (p.mrr ?? 0) + (p.estruturacao_estrategica ?? 0) + (p.variavel ?? 0), 0);
+    }
 
-    // Receita Total = MRR + estruturação + variável
-    // Nota: investimento = verba de mídia do cliente, não é receita da V4
-    const receitaTotal = filtered.reduce((sum, p) =>
-      sum + (p.mrr ?? 0) + (p.estruturacao_estrategica ?? 0) + (p.variavel ?? 0), 0);
-
-    // MRR Ativo = soma do MRR apenas dos projetos ativos (recorrente puro)
     const mrrAtivo = activeFiltered.reduce((sum, p) => sum + (p.mrr ?? 0), 0);
-
-    // Churn Financeiro = soma do MRR dos projetos que já churnarom
     const churnFinanceiro = churnedFiltered.reduce((sum, p) => sum + (p.mrr ?? 0), 0);
 
-    const setor = SETORES.find((s) => s.id === filterSetor);
     return {
-      total: filtered.length,
+      total: base.length,
       active: activeFiltered.length,
-      totalProjetos,
+      totalProjetos: base.length,
       receitaTotal,
+      receitaLabel,
       mrrAtivo,
       churnFinanceiro,
-      metricLabel: setor?.metricLabel ?? "MRR",
-      byMomento: filtered.reduce<Record<string, number>>((acc, p) => {
-        const m = p.momento ?? "";
-        if (m) acc[m] = (acc[m] ?? 0) + 1;
-        return acc;
-      }, {}),
+      showMRR: filterSetor !== "executar", // Executar não mostra MRR separado (já é a métrica principal)
+      showChurn: filterSetor !== "saber" && filterSetor !== "ter",
     };
-  }, [filtered, filterSetor]);
+  }, [filteredByMes, filterSetor]);
 
   // Kanban grouping
   const kanbanColumns = useMemo(() => {
@@ -2742,10 +2780,22 @@ export function ProjectsPage() {
           </button>
         </div>
 
+        {/* Mês */}
+        <div className="relative flex-shrink-0">
+          <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)}
+            className="h-8 px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7 min-w-[130px]"
+          >
+            {mesOptions.map((m, i) => (
+              <option key={m.value} value={i === 0 ? "" : m.value}>{i === 0 ? `${m.label} (atual)` : m.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        </div>
+
         {/* Limpar filtros */}
-        {(filterMomento || filterSquad || filterDupla || search || filterSetor) && (
+        {(filterMomento || filterSquad || filterDupla || search || filterSetor || filterMes) && (
           <button
-            onClick={() => { setSearch(""); setFilterMomento(""); setFilterSquad(""); setFilterDupla(""); setFilterSetor(""); }}
+            onClick={() => { setSearch(""); setFilterMomento(""); setFilterSquad(""); setFilterDupla(""); setFilterSetor(""); setFilterMes(""); }}
             className="flex items-center gap-1 h-8 px-2 text-xs text-muted-foreground hover:text-foreground flex-shrink-0"
           >
             <X size={11} />
@@ -2753,22 +2803,42 @@ export function ProjectsPage() {
         )}
       </div>
 
-      {/* ── Row 3: KPIs mini em linha ── */}
-      <div className="flex-shrink-0 grid grid-cols-4 gap-2">
-        {[
-          { label: "Projetos", value: filteredStats.totalProjetos, sub: `${filteredStats.active} ativos` },
-          { label: "Receita Total", value: formatMRR(filteredStats.receitaTotal), sub: "todas as fontes" },
-          { label: "MRR Ativo", value: formatMRR(filteredStats.mrrAtivo), sub: "recorrente" },
-          { label: "Churn Financeiro", value: formatMRR(filteredStats.churnFinanceiro), sub: `${filtered.filter(p => !!p.churn_date).length} projetos` },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-medium text-muted-foreground">{kpi.label}</p>
-              <p className="text-base font-bold tracking-tight leading-tight">{kpi.value}</p>
-            </div>
-            <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">{kpi.sub}</p>
+      {/* ── Row 3: KPIs mini em linha — adaptativos por setor ── */}
+      <div className="flex-shrink-0 grid gap-2" style={{ gridTemplateColumns: filteredStats.showMRR && filteredStats.showChurn ? "repeat(4, 1fr)" : filteredStats.showMRR || filteredStats.showChurn ? "repeat(3, 1fr)" : "repeat(2, 1fr)" }}>
+        <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-medium text-muted-foreground">Projetos</p>
+            <p className="text-base font-bold tracking-tight leading-tight">{filteredStats.totalProjetos}</p>
           </div>
-        ))}
+          <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">{filteredStats.active} ativos</p>
+        </div>
+        <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-medium text-muted-foreground">{filteredStats.receitaLabel}</p>
+            <p className="text-base font-bold tracking-tight leading-tight">{formatMRR(filteredStats.receitaTotal)}</p>
+          </div>
+          <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">
+            {filterMes ? mesOptions.find(m => m.value === filterMes)?.label.split(" ")[0] : "este mês"}
+          </p>
+        </div>
+        {filteredStats.showMRR && (
+          <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground">MRR Ativo</p>
+              <p className="text-base font-bold tracking-tight leading-tight">{formatMRR(filteredStats.mrrAtivo)}</p>
+            </div>
+            <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">recorrente</p>
+          </div>
+        )}
+        {filteredStats.showChurn && (
+          <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-medium text-muted-foreground">Churn Financeiro</p>
+              <p className="text-base font-bold tracking-tight leading-tight">{formatMRR(filteredStats.churnFinanceiro)}</p>
+            </div>
+            <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">{filtered.filter(p => !!p.churn_date).length} projetos</p>
+          </div>
+        )}
       </div>
 
       {/* ── Loading / Error states ── */}
