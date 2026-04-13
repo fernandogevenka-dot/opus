@@ -2587,10 +2587,15 @@ export function ProjectsPage() {
   }
 
 
-  // Duplas disponíveis (gestor_projeto)
+  // Duplas disponíveis — só gestores de projetos ativos, sem "(inativo)" no nome
   const duplaOptions = useMemo(() => {
-    const names = new Set(projects.map((p) => p.gestor_projeto).filter(Boolean));
-    return Array.from(names).sort() as string[];
+    const names = new Set(
+      projects
+        .filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento))
+        .map((p) => p.gestor_projeto)
+        .filter((g): g is string => !!g && !g.toLowerCase().includes("inativo"))
+    );
+    return Array.from(names).sort();
   }, [projects]);
 
   // ── Render ────────────────────────────────────────────────────────────────
