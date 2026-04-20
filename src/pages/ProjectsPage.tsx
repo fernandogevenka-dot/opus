@@ -2795,14 +2795,30 @@ export function ProjectsPage() {
   // Active jornada tab — driven by sidebar store
   const { projectsSetor, setProjectsSetor, projectsClientFilter, setProjectsClientFilter } = useAppStore();
 
+  // "executar-all" = todos os projetos Executar juntos (sem filtro de sub-jornada)
+  const isExecutarAll = projectsSetor === "executar-all";
+
   // Map sidebar store value to jornada tab
-  // "executar" from sidebar → default to first executar sub-tab
   const activeTab: JornadaTab = (
-    projectsSetor === "executar" ? "executar-onboarding" : (projectsSetor as JornadaTab)
+    projectsSetor === "executar" || projectsSetor === "executar-all" ? "executar-onboarding" : (projectsSetor as JornadaTab)
   ) || "saber";
   const setActiveTab = (tab: JornadaTab) => setProjectsSetor(tab as import("@/store/appStore").ProjectsSetor);
 
   const activeConfig = JORNADA_CONFIGS.find((c) => c.step === activeTab) ?? JORNADA_CONFIGS[0];
+
+  // Config virtual para "Todos Executar" — colunas de todas as 3 jornadas unificadas
+  const EXECUTAR_STEPS = ["executar-onboarding", "executar-implementacoes", "executar"];
+  const executarAllConfig: JornadaConfig = useMemo(() => {
+    const allColunas: string[] = [];
+    const allEncerradas = new Set<string>();
+    for (const cfg of JORNADA_CONFIGS.filter((c) => EXECUTAR_STEPS.includes(c.step))) {
+      for (const col of cfg.colunas) {
+        if (!allColunas.includes(col)) allColunas.push(col);
+      }
+      cfg.encerradas?.forEach((e) => allEncerradas.add(e));
+    }
+    return { title: "Executar", step: "executar-all", colunas: allColunas, color: "#10b981", encerradas: allEncerradas };
+  }, []);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -2834,7 +2850,12 @@ export function ProjectsPage() {
   // Filtered projects for active tab
   const filtered = useMemo(() => {
     return projects.filter((p) => {
-      if (p.step !== activeTab) return false;
+      // executar-all: mostra todos os projetos das 3 sub-jornadas
+      if (isExecutarAll) {
+        if (!EXECUTAR_STEPS.includes(p.step ?? "")) return false;
+      } else {
+        if (p.step !== activeTab) return false;
+      }
       // Filtro por cliente (navegação de Clientes → Projetos)
       if (projectsClientFilter && p.client_id !== projectsClientFilter) return false;
 
@@ -2870,12 +2891,12 @@ export function ProjectsPage() {
 
   // Projects for dash: all projects belonging to the active setor category (no search/squad filters)
   const dashProjects = useMemo(() => {
-    const isExecutar = projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
+    const isExecutarAny = isExecutarAll || projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
     return projects.filter((p) => {
-      if (isExecutar) return p.step === "executar" || p.step === "executar-onboarding" || p.step === "executar-implementacoes";
+      if (isExecutarAny) return EXECUTAR_STEPS.includes(p.step ?? "");
       return p.step === activeTab;
     });
-  }, [projects, projectsSetor, activeTab]);
+  }, [projects, projectsSetor, activeTab, isExecutarAll]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2897,6 +2918,38 @@ export function ProjectsPage() {
 
         {/* Jornada tabs — filtradas pelo setor ativo no sidebar */}
         {(() => {
+          // executar-all: mostra tabs para filtrar por sub-jornada (Todos + 3 sub-jornadas)
+          if (isExecutarAll) {
+            const subConfigs = JORNADA_CONFIGS.filter((c) => EXECUTAR_STEPS.includes(c.step));
+            return (
+              <div className="flex items-center gap-0.5 bg-secondary/30 border border-border/40 rounded-xl p-0.5">
+                {/* "Todos" tab */}
+                <button
+                  onClick={() => setProjectsSetor("executar-all")}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 bg-background text-foreground shadow-sm"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-[#10b981]" />
+                  Todos
+                  <span className="text-[10px] font-semibold text-foreground/60">{filtered.length}</span>
+                </button>
+                {subConfigs.map((cfg) => {
+                  const count = filtered.filter((p) => p.step === cfg.step).length;
+                  return (
+                    <button
+                      key={cfg.step}
+                      onClick={() => setActiveTab(cfg.step as JornadaTab)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.color }} />
+                      {cfg.title}
+                      {count > 0 && <span className="text-[10px] font-semibold text-muted-foreground/50">{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          }
+
           const isExecutar = projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
           const visibleConfigs = JORNADA_CONFIGS.filter((cfg) => {
             if (projectsSetor === "saber") return cfg.step === "saber";
@@ -3041,7 +3094,7 @@ export function ProjectsPage() {
               className="h-full"
             >
               <JornadaKanban
-                config={activeConfig}
+                config={isExecutarAll ? executarAllConfig : activeConfig}
                 projects={filtered}
                 onCardClick={openDetail}
                 onEdit={openEdit}

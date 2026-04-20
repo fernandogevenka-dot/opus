@@ -4,7 +4,8 @@ import { persist } from "zustand/middleware";
 export type AppPage = "office" | "feed" | "ai" | "wiki" | "cs" | "meetings" | "workspace" | "office-settings" | "desk-customize" | "profile" | "wa-cs" | "projects" | "products" | "squads" | "collaborators" | "checkins" | "user-approval" | "feature-requests" | "gtm-cockpit" | "mbr";
 
 // Jornada step values — used as sub-tab within ProjectsPage
-export type ProjectsSetor = "saber" | "ter" | "executar-onboarding" | "executar-implementacoes" | "executar" | "";
+// "executar-all" = todos os projetos das 3 sub-jornadas Executar juntos
+export type ProjectsSetor = "saber" | "ter" | "executar-all" | "executar-onboarding" | "executar-implementacoes" | "executar" | "";
 
 interface AppState {
   currentPage: AppPage;

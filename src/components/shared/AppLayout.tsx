@@ -105,7 +105,7 @@ const STEP_SUB_ITEMS: StepSubItem[] = [
 
 function isSubActive(id: ProjectsSetor, current: ProjectsSetor): boolean {
   if (id === "executar") {
-    return current === "executar" || current === "executar-onboarding" || current === "executar-implementacoes";
+    return current === "executar" || current === "executar-all" || current === "executar-onboarding" || current === "executar-implementacoes";
   }
   return current === id;
 }
@@ -119,7 +119,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [knockCount, setKnockCount] = useState(0);
   // Executar sub-menu: expand whenever an executar-* setor is active
-  const isExecutarActive = projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
+  const isExecutarActive = projectsSetor === "executar" || projectsSetor === "executar-all" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
   const [executarExpanded, setExecutarExpanded] = useState(isExecutarActive);
   // Keep expanded in sync when setor changes externally (e.g. sidebar click → kanban tab click)
   useEffect(() => {
@@ -281,12 +281,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                                   <button
                                     onClick={() => {
                                       if (hasChildren) {
-                                        setExecutarExpanded((v) => !v);
-                                        // se estiver fechando e um filho está ativo, não muda o setor
-                                        // se estiver abrindo, seleciona o primeiro filho
-                                        if (!executarExpanded) {
-                                          setProjectsSetor("executar-onboarding");
-                                        }
+                                        // sempre expande e mostra todos juntos
+                                        setExecutarExpanded(true);
+                                        setProjectsSetor("executar-all");
                                       } else {
                                         setProjectsSetor(sub.id);
                                       }
