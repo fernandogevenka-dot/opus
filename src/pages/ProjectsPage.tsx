@@ -2794,8 +2794,11 @@ export function ProjectsPage() {
   // Active jornada tab — driven by sidebar store
   const { projectsSetor, setProjectsSetor, projectsClientFilter, setProjectsClientFilter } = useAppStore();
 
-  // Map sidebar store value to jornada tab (default to first jornada)
-  const activeTab: JornadaTab = (projectsSetor as JornadaTab) || "saber";
+  // Map sidebar store value to jornada tab
+  // "executar" from sidebar → default to first executar sub-tab
+  const activeTab: JornadaTab = (
+    projectsSetor === "executar" ? "executar-onboarding" : (projectsSetor as JornadaTab)
+  ) || "saber";
   const setActiveTab = (tab: JornadaTab) => setProjectsSetor(tab as import("@/store/appStore").ProjectsSetor);
 
   const activeConfig = JORNADA_CONFIGS.find((c) => c.step === activeTab) ?? JORNADA_CONFIGS[0];
@@ -2872,32 +2875,44 @@ export function ProjectsPage() {
       {/* ── Top bar: jornada tabs + filters + new button ── */}
       <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
 
-        {/* Jornada tabs */}
-        <div className="flex items-center gap-0.5 bg-secondary/30 border border-border/40 rounded-xl p-0.5">
-          {JORNADA_CONFIGS.map((cfg) => {
-            const isActive = activeTab === cfg.step;
-            return (
-              <button
-                key={cfg.step}
-                onClick={() => setActiveTab(cfg.step as JornadaTab)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: isActive ? cfg.color : "#6b7280" }}
-                />
-                {cfg.title}
-                {countPerStep[cfg.step] > 0 && (
-                  <span className={`text-[10px] font-semibold ${isActive ? "text-foreground/60" : "text-muted-foreground/50"}`}>
-                    {countPerStep[cfg.step]}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* Jornada tabs — filtradas pelo setor ativo no sidebar */}
+        {(() => {
+          const isExecutar = projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
+          const visibleConfigs = JORNADA_CONFIGS.filter((cfg) => {
+            if (projectsSetor === "saber") return cfg.step === "saber";
+            if (projectsSetor === "ter")   return cfg.step === "ter";
+            if (isExecutar) return cfg.step === "executar-onboarding" || cfg.step === "executar-implementacoes" || cfg.step === "executar";
+            return true;
+          });
+          if (visibleConfigs.length <= 1) return null; // só 1 tab → não precisa mostrar o switcher
+          return (
+            <div className="flex items-center gap-0.5 bg-secondary/30 border border-border/40 rounded-xl p-0.5">
+              {visibleConfigs.map((cfg) => {
+                const isActive = activeTab === cfg.step;
+                return (
+                  <button
+                    key={cfg.step}
+                    onClick={() => setActiveTab(cfg.step as JornadaTab)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: isActive ? cfg.color : "#6b7280" }}
+                    />
+                    {cfg.title}
+                    {countPerStep[cfg.step] > 0 && (
+                      <span className={`text-[10px] font-semibold ${isActive ? "text-foreground/60" : "text-muted-foreground/50"}`}>
+                        {countPerStep[cfg.step]}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         <div className="w-px h-5 bg-border/50 flex-shrink-0" />
 

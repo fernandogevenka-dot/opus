@@ -82,13 +82,21 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+// 3 categorias de produto no menu lateral
+// Clicar em "Executar" define setor "executar" → ProjectsPage default para a 1ª aba executar
 const STEP_SUB_ITEMS: { id: ProjectsSetor; label: string; color: string }[] = [
-  { id: "saber",                  label: "Diagnósticos",  color: "#8b5cf6" },
-  { id: "ter",                    label: "Implementação", color: "#06b6d4" },
-  { id: "executar-onboarding",    label: "Onboarding",    color: "#22c55e" },
-  { id: "executar-implementacoes",label: "Implementações",color: "#f59e0b" },
-  { id: "executar",               label: "Ongoing",       color: "#10b981" },
+  { id: "saber",    label: "Saber",    color: "#8b5cf6" },
+  { id: "ter",      label: "Ter",      color: "#06b6d4" },
+  { id: "executar", label: "Executar", color: "#10b981" },
 ];
+
+// Helper: considera ativo se o setor salvo pertence à categoria
+function isSubActive(sub: ProjectsSetor, current: ProjectsSetor): boolean {
+  if (sub === "executar") {
+    return current === "executar" || current === "executar-onboarding" || current === "executar-implementacoes";
+  }
+  return current === sub;
+}
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { currentPage, setCurrentPage, knockNotification, setKnockNotification, projectsSetor, setProjectsSetor } = useAppStore();
@@ -245,7 +253,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                         {item.id === "projects" && isActive && (
                           <div className="ml-4 mt-0.5 mb-1 pl-3 border-l border-white/10 space-y-0.5">
                             {STEP_SUB_ITEMS.map((sub) => {
-                              const subActive = projectsSetor === sub.id;
+                              const subActive = isSubActive(sub.id, projectsSetor);
                               return (
                                 <button
                                   key={sub.id}
