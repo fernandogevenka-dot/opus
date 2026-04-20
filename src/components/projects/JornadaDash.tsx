@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { TrendingUp, TrendingDown, Minus, ChevronDown, X } from "lucide-react";
 import type { Project } from "@/hooks/useProjects";
+import { ACTIVE_MOMENTOS, type ProjectMomento } from "@/hooks/useProjects";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,11 +46,23 @@ function lastNMonths(n: number): { label: string; year: number; month: number }[
 function projectsActiveInMonth(projects: Project[], year: number, month: number): Project[] {
   const monthStart = new Date(year, month, 1);
   const monthEnd   = new Date(year, month + 1, 0, 23, 59, 59);
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+
   return projects.filter((p) => {
-    if (!p.start_date) return false;
+    // Projetos sem start_date: se for o mês atual e momento ativo → incluir
+    if (!p.start_date) {
+      if (isCurrentMonth) return ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento);
+      return false;
+    }
+
+    // start_date depois do fim do mês → ainda não havia começado
     if (new Date(p.start_date) > monthEnd) return false;
+
+    // Se há data de encerramento/churn antes do início do mês → já encerrou
     const endRaw = p.churn_date ?? p.end_date ?? null;
     if (endRaw && new Date(endRaw) < monthStart) return false;
+
     return true;
   });
 }
