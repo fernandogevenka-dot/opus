@@ -163,9 +163,9 @@ interface QuickLinkProps {
 function QuickLink({ label, icon, url }: QuickLinkProps) {
   if (!url) {
     return (
-      <div className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-secondary/20 border border-border/20 opacity-40 cursor-not-allowed select-none">
-        <div className="text-muted-foreground">{icon}</div>
-        <span className="text-[10px] text-muted-foreground text-center leading-tight">{label}</span>
+      <div className="flex flex-col items-center gap-2 py-4 px-2 rounded-xl bg-secondary/20 border border-border/20 opacity-35 cursor-not-allowed select-none">
+        <div className="text-muted-foreground [&>svg]:w-6 [&>svg]:h-6">{icon}</div>
+        <span className="text-xs text-muted-foreground text-center leading-tight">{label}</span>
       </div>
     );
   }
@@ -174,10 +174,10 @@ function QuickLink({ label, icon, url }: QuickLinkProps) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-secondary/30 border border-border/30 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+      className="flex flex-col items-center gap-2 py-4 px-2 rounded-xl bg-secondary/30 border border-border/30 hover:border-primary/40 hover:bg-primary/5 transition-all group"
     >
-      <div className="text-foreground/60 group-hover:text-primary transition-colors">{icon}</div>
-      <span className="text-[10px] text-foreground/70 group-hover:text-primary text-center leading-tight transition-colors">{label}</span>
+      <div className="text-foreground/50 group-hover:text-primary transition-colors [&>svg]:w-6 [&>svg]:h-6">{icon}</div>
+      <span className="text-xs text-foreground/65 group-hover:text-primary text-center leading-tight transition-colors">{label}</span>
     </a>
   );
 }
@@ -505,6 +505,16 @@ export function ProjectDetailPage({
           {/* ── Left column ─────────────────────────────────────────────────── */}
           <div className="overflow-y-auto px-6 py-5 border-r border-border/30 space-y-6">
 
+            {/* Links rápidos — topo da coluna esquerda */}
+            <section>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Links rápidos</h2>
+              <div className="grid grid-cols-4 gap-3">
+                {links.map((l) => (
+                  <QuickLink key={l.label} label={l.label} icon={l.icon} url={l.url} />
+                ))}
+              </div>
+            </section>
+
             {/* Contexto section */}
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Contexto</h2>
@@ -613,16 +623,6 @@ export function ProjectDetailPage({
                 <span className="text-sm font-medium text-foreground/80">{project.momento ?? "—"}</span>
               </div>
             </div>
-
-            {/* Links rápidos */}
-            <section>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Links rápidos</h2>
-              <div className="grid grid-cols-4 gap-2">
-                {links.map((l) => (
-                  <QuickLink key={l.label} label={l.label} icon={l.icon} url={l.url} />
-                ))}
-              </div>
-            </section>
 
             {/* Informações da fase atual */}
             <section>
