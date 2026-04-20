@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Edit2, Trash2, ChevronDown } from "lucide-react";
+import { Edit2, Trash2, ChevronDown, Calendar } from "lucide-react";
 import type { Project } from "@/hooks/useProjects";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -68,18 +68,26 @@ function JornadaCard({ project, colunas, color, onCardClick, onEdit, onDelete, o
     setPicking(false);
   }
 
+  // Saúde badge config
+  const saudeCfg = (() => {
+    if (project.saude === "saudavel") return { label: "Saudável", bg: "bg-green-500/15", text: "text-green-600 dark:text-green-400", border: "border-green-500/30" };
+    if (project.saude === "atencao")  return { label: "Atenção",  bg: "bg-yellow-500/15", text: "text-yellow-600 dark:text-yellow-400", border: "border-yellow-500/30" };
+    if (project.saude === "critico")  return { label: "Crítico",  bg: "bg-red-500/15",    text: "text-red-600 dark:text-red-400",       border: "border-red-500/30"    };
+    return null;
+  })();
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      className="glass rounded-xl p-3 cursor-pointer group relative flex flex-col gap-2 border border-border/30 hover:border-border/60 transition-colors"
+      className="bg-card rounded-xl cursor-pointer group relative flex flex-col border border-border/40 hover:border-border/70 hover:shadow-sm transition-all overflow-hidden"
       onClick={onCardClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => { setHover(false); setPicking(false); }}
     >
-      {/* Action buttons */}
+      {/* Action buttons — appear on hover */}
       <AnimatePresence>
         {hover && !picking && (
           <motion.div
@@ -91,13 +99,13 @@ function JornadaCard({ project, colunas, color, onCardClick, onEdit, onDelete, o
           >
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-primary/20 hover:text-primary flex items-center justify-center transition-colors"
+              className="w-6 h-6 rounded-md bg-background/90 border border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 flex items-center justify-center transition-colors"
             >
               <Edit2 size={11} />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="w-6 h-6 rounded-md bg-secondary/80 hover:bg-destructive/20 hover:text-destructive flex items-center justify-center transition-colors"
+              className="w-6 h-6 rounded-md bg-background/90 border border-border/50 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 flex items-center justify-center transition-colors"
             >
               <Trash2 size={11} />
             </button>
@@ -105,48 +113,68 @@ function JornadaCard({ project, colunas, color, onCardClick, onEdit, onDelete, o
         )}
       </AnimatePresence>
 
-      {/* Name */}
-      <p className="text-sm font-semibold leading-snug truncate pr-14">{project.name}</p>
-
-      {/* Client · Squad */}
-      <p className="text-[11px] text-muted-foreground truncate">
-        {project.client_name ?? "—"}
-        {project.squad_name && <> · {project.squad_name}</>}
-      </p>
-
-      {/* Gestor + LT + Metric */}
-      <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
-        {project.gestor_projeto && (
-          <span className="truncate">{project.gestor_projeto.split(" ")[0]}</span>
+      {/* ── Top section: saúde + tier ── */}
+      <div className="px-3 pt-3 pb-2 flex items-center gap-2">
+        {saudeCfg ? (
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${saudeCfg.bg} ${saudeCfg.text} ${saudeCfg.border}`}>
+            {saudeCfg.label}
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border bg-muted/30 text-muted-foreground border-border/30">
+            —
+          </span>
         )}
-        {lt && <span>{lt}m</span>}
-        {metric > 0 && (
-          <span className="ml-auto font-medium" style={{ color }}>
-            {formatMoney(metric)}{isRec ? "/mês" : ""}
+        {project.tier && (
+          <span className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
+            {project.tier}
           </span>
         )}
       </div>
 
-      {/* Fase picker */}
-      <div onClick={(e) => e.stopPropagation()}>
+      {/* ── Client name ── */}
+      <div className="px-3 pb-2">
+        <p className="text-sm font-bold text-foreground leading-snug pr-10">
+          {project.client_name ?? project.name}
+        </p>
+        {project.client_name && project.name !== project.client_name && (
+          <p className="text-[11px] text-muted-foreground/70 mt-0.5 truncate">{project.name}</p>
+        )}
+      </div>
+
+      {/* ── Valor + LT chips ── */}
+      <div className="px-3 pb-3 flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center rounded-full border border-border/50 bg-secondary/40 px-2.5 py-0.5 text-xs text-foreground/70">
+          Valor: {metric > 0 ? formatMoney(metric) : "0,00"}
+        </span>
+        {lt && (
+          <span className="inline-flex items-center rounded-full border border-border/50 bg-secondary/40 px-2.5 py-0.5 text-xs text-foreground/70">
+            LT: {lt} {lt === 1 ? "mês" : "meses"}
+          </span>
+        )}
+      </div>
+
+      {/* ── Divider ── */}
+      <div className="border-t border-border/30 mx-0" />
+
+      {/* ── Fase row ── */}
+      <div className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
         {!picking ? (
           <button
             onClick={() => setPicking(true)}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all hover:opacity-80 w-full"
-            style={{
-              color: fase ? color : "#6b7280",
-              borderColor: (fase ? color : "#6b7280") + "40",
-              backgroundColor: (fase ? color : "#6b7280") + "15",
-            }}
+            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full text-left"
             title="Clique para alterar fase"
           >
+            <Calendar size={11} className="flex-shrink-0 opacity-60" />
             {saving ? (
-              <span className="w-2 h-2 border border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
             ) : (
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: fase ? color : "#6b7280" }} />
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: fase ? color : "#9ca3af" }}
+              />
             )}
-            <span className="truncate flex-1 text-left">{fase ?? "— sem fase —"}</span>
-            <ChevronDown size={10} className="flex-shrink-0 opacity-60" />
+            <span className="truncate flex-1">{fase ? `Fase: ${fase}` : "Início na fase: —"}</span>
+            <ChevronDown size={10} className="flex-shrink-0 opacity-40" />
           </button>
         ) : (
           <select
