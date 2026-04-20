@@ -40,6 +40,8 @@ export interface Project {
   crm_url?: string;
   sistema_dados_url?: string;
   contrato_url?: string;
+  pic_url?: string;
+  sprint_url?: string;
   meta_ads_id?: string;
   google_ads_id?: string;
   ekyte_id?: number;
@@ -100,6 +102,8 @@ export interface ProjectFormData {
   pasta_publica?: string;
   pasta_privada?: string;
   crm_url?: string;
+  pic_url?: string;
+  sprint_url?: string;
   meta_ads_id?: string;
   google_ads_id?: string;
   wa_group_id?: string;

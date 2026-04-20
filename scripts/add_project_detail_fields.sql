@@ -5,7 +5,9 @@ ALTER TABLE projects
   ADD COLUMN IF NOT EXISTS escopo      TEXT,
   ADD COLUMN IF NOT EXISTS observacoes TEXT,
   ADD COLUMN IF NOT EXISTS tier        TEXT,
-  ADD COLUMN IF NOT EXISTS saude       TEXT CHECK (saude IN ('saudavel', 'atencao', 'critico'));
+  ADD COLUMN IF NOT EXISTS saude       TEXT CHECK (saude IN ('saudavel', 'atencao', 'critico')),
+  ADD COLUMN IF NOT EXISTS pic_url     TEXT,
+  ADD COLUMN IF NOT EXISTS sprint_url  TEXT;
 
 COMMENT ON COLUMN projects.escopo      IS 'Descrição do escopo do projeto (editável inline na tela de detalhe)';
 COMMENT ON COLUMN projects.observacoes IS 'Observações internas e contexto relevante';

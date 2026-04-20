@@ -362,14 +362,14 @@ export function ProjectDetailPage({
       url: project.pasta_privada,
     },
     {
-      label: "CRM",
+      label: "P.I.C",
       icon: <TrendingUp size={18} />,
-      url: project.crm_url,
+      url: project.pic_url,
     },
     {
-      label: "Relatório de BI",
-      icon: <BarChart2 size={18} />,
-      url: project.sistema_dados_url,
+      label: "Sprint Semanal",
+      icon: <Star size={18} />,
+      url: project.sprint_url,
     },
     {
       label: "Contrato",
@@ -385,7 +385,7 @@ export function ProjectDetailPage({
     },
     {
       label: "Meta Ads",
-      icon: <Star size={18} />,
+      icon: <Link2 size={18} />,
       url: project.meta_ads_id
         ? `https://business.facebook.com/adsmanager/manage/campaigns?act=${project.meta_ads_id}`
         : null,
