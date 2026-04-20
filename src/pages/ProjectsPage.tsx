@@ -2884,7 +2884,12 @@ export function ProjectsPage() {
 
       {/* ── Dash de métricas ── */}
       {!loading && !error && (
-        <JornadaDash projects={dashProjects} setor={projectsSetor || activeTab} />
+        <JornadaDash
+          projects={dashProjects}
+          setor={projectsSetor || activeTab}
+          filterSquad={filterSquad || undefined}
+          filterDupla={filterDupla || undefined}
+        />
       )}
 
       {/* ── Top bar: jornada tabs + filters + new button ── */}

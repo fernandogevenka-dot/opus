@@ -6,8 +6,10 @@ import { ACTIVE_MOMENTOS, type ProjectMomento } from "@/hooks/useProjects";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface JornadaDashProps {
-  projects: Project[];   // todos os projetos do setor visível
-  setor: string;         // "saber" | "ter" | "executar-*"
+  projects: Project[];    // todos os projetos do setor (sem filtro de busca)
+  setor: string;          // "saber" | "ter" | "executar-*"
+  filterSquad?: string;   // filtro squad aplicado no kanban
+  filterDupla?: string;   // filtro responsável aplicado no kanban
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,27 +105,27 @@ interface MetricCardProps {
 
 function MetricCard({ label, value, sub, trend, trendLabel, color }: MetricCardProps) {
   return (
-    <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border/40 bg-secondary/20 min-w-0">
+    <div className="flex flex-col gap-1 px-4 py-3 rounded-xl border border-border/40 bg-secondary/20 w-[160px] flex-shrink-0">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
       <p
-        className="text-xl font-bold leading-tight truncate"
+        className="text-lg font-bold leading-tight truncate"
         style={color ? { color } : undefined}
       >
         {value}
       </p>
       {(sub || trendLabel) && (
-        <div className="flex items-center gap-1.5 mt-0.5">
-          {trend === "up"      && <TrendingUp  size={11} className="text-green-500 flex-shrink-0" />}
-          {trend === "down"    && <TrendingDown size={11} className="text-red-500   flex-shrink-0" />}
-          {trend === "neutral" && <Minus        size={11} className="text-muted-foreground flex-shrink-0" />}
+        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+          {trend === "up"      && <TrendingUp  size={10} className="text-green-500 flex-shrink-0" />}
+          {trend === "down"    && <TrendingDown size={10} className="text-red-500   flex-shrink-0" />}
+          {trend === "neutral" && <Minus        size={10} className="text-muted-foreground flex-shrink-0" />}
           {trendLabel && (
-            <span className={`text-[10px] font-medium ${
+            <span className={`text-[10px] font-medium leading-tight ${
               trend === "up" ? "text-green-500" : trend === "down" ? "text-red-500" : "text-muted-foreground"
             }`}>
               {trendLabel}
             </span>
           )}
-          {sub && <span className="text-[10px] text-muted-foreground">{sub}</span>}
+          {sub && <span className="text-[10px] text-muted-foreground leading-tight">{sub}</span>}
         </div>
       )}
     </div>
@@ -132,7 +134,7 @@ function MetricCard({ label, value, sub, trend, trendLabel, color }: MetricCardP
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function JornadaDash({ projects, setor }: JornadaDashProps) {
+export function JornadaDash({ projects, setor, filterSquad, filterDupla }: JornadaDashProps) {
   const months = useMemo(() => lastNMonths(13), []);
   const [selectedIdx, setSelectedIdx] = useState(months.length - 1); // default = mês atual
 
@@ -143,12 +145,19 @@ export function JornadaDash({ projects, setor }: JornadaDashProps) {
   const isSaber    = setor === "saber";
   const isTer      = setor === "ter";
 
+  // Aplica filtros de squad/responsável
+  const filtered = useMemo(() => projects.filter((p) => {
+    if (filterSquad && p.squad_name !== filterSquad) return false;
+    if (filterDupla && p.gestor_projeto !== filterDupla && p.gestor_trafego !== filterDupla) return false;
+    return true;
+  }), [projects, filterSquad, filterDupla]);
+
   // ── Executar metrics ───────────────────────────────────────────────────────
   const executarMetrics = useMemo(() => {
     if (!isExecutar) return null;
 
-    const active     = projectsActiveInMonth(projects, sel.year, sel.month);
-    const prevActive = prev ? projectsActiveInMonth(projects, prev.year, prev.month) : [];
+    const active     = projectsActiveInMonth(filtered, sel.year, sel.month);
+    const prevActive = prev ? projectsActiveInMonth(filtered, prev.year, prev.month) : [];
 
     const mrr      = active.reduce((s, p) => s + (p.mrr ?? 0), 0);
     const prevMrr  = prevActive.reduce((s, p) => s + (p.mrr ?? 0), 0);
@@ -158,35 +167,35 @@ export function JornadaDash({ projects, setor }: JornadaDashProps) {
       ? active.reduce((s, p) => s + lifetimeMonths(p.start_date), 0) / active.length
       : 0;
 
-    const churned    = projectsChurnedInMonth(projects, sel.year, sel.month);
+    const churned    = projectsChurnedInMonth(filtered, sel.year, sel.month);
     const churnMRR   = churned.reduce((s, p) => s + (p.mrr ?? 0), 0);
 
-    const expansao   = expansaoMRR(projects, sel.year, sel.month);
+    const expansao   = expansaoMRR(filtered, sel.year, sel.month);
 
     const ticketMedio = active.length > 0 ? mrr / active.length : 0;
 
     return { mrr, prevMrr, mrrDelta, lt, churnMRR, expansao, ticketMedio, activeCount: active.length, churnCount: churned.length };
-  }, [projects, sel, prev, isExecutar]);
+  }, [filtered, sel, prev, isExecutar]);
 
   // ── Saber metrics ─────────────────────────────────────────────────────────
   const saberMetrics = useMemo(() => {
     if (!isSaber) return null;
-    const active = projectsActiveInMonth(projects, sel.year, sel.month);
+    const active = projectsActiveInMonth(filtered, sel.year, sel.month);
     const receita = active.reduce((s, p) => s + (p.estruturacao_estrategica ?? p.investimento ?? 0), 0);
-    const prevActive = prev ? projectsActiveInMonth(projects, prev.year, prev.month) : [];
+    const prevActive = prev ? projectsActiveInMonth(filtered, prev.year, prev.month) : [];
     const prevReceita = prevActive.reduce((s, p) => s + (p.estruturacao_estrategica ?? p.investimento ?? 0), 0);
     return { receita, prevReceita, count: active.length };
-  }, [projects, sel, prev, isSaber]);
+  }, [filtered, sel, prev, isSaber]);
 
   // ── Ter metrics ────────────────────────────────────────────────────────────
   const terMetrics = useMemo(() => {
     if (!isTer) return null;
-    const active = projectsActiveInMonth(projects, sel.year, sel.month);
+    const active = projectsActiveInMonth(filtered, sel.year, sel.month);
     const receita = active.reduce((s, p) => s + (p.investimento ?? 0), 0);
-    const prevActive = prev ? projectsActiveInMonth(projects, prev.year, prev.month) : [];
+    const prevActive = prev ? projectsActiveInMonth(filtered, prev.year, prev.month) : [];
     const prevReceita = prevActive.reduce((s, p) => s + (p.investimento ?? 0), 0);
     return { receita, prevReceita, count: active.length };
-  }, [projects, sel, prev, isTer]);
+  }, [filtered, sel, prev, isTer]);
 
   function trendDir(curr: number, prevVal: number): "up" | "down" | "neutral" {
     if (!prevVal) return "neutral";
