@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAppStore } from "@/store/appStore";
 import {
   useProjects,
@@ -46,6 +46,7 @@ import {
   ToggleRight,
   AlertCircle,
   Loader2,
+  Layers,
 } from "lucide-react";
 import { getCategoryForProduct, PRODUCT_CATALOG } from "@/lib/productCatalog";
 
@@ -1238,6 +1239,7 @@ const EMPTY_FORM: ProjectFormData = {
   client_id: undefined,
   squad_id: undefined,
   squad_name: undefined,
+  step: undefined,
   mrr: undefined,
   investimento: undefined,
   margem_bruta: undefined,
@@ -1261,8 +1263,69 @@ const EMPTY_FORM: ProjectFormData = {
   taxa_conversao: undefined,
 };
 
+// ─── Categorias / Jornadas ────────────────────────────────────────────────────
+
+const JORNADA_CATEGORIAS = [
+  {
+    id: "saber",
+    label: "Diagnósticos",
+    grupo: "Saber",
+    color: "#8b5cf6",
+    bg: "#8b5cf618",
+    desc: "Estruturação estratégica e diagnóstico",
+    step: "saber",
+  },
+  {
+    id: "ter",
+    label: "Implementação",
+    grupo: "Ter",
+    color: "#06b6d4",
+    bg: "#06b6d418",
+    desc: "Implementação de produto ou serviço",
+    step: "ter",
+  },
+  {
+    id: "executar-onboarding",
+    label: "Onboarding",
+    grupo: "Executar",
+    color: "#22c55e",
+    bg: "#22c55e18",
+    desc: "Embarque e kick-off do cliente",
+    step: "executar-onboarding",
+  },
+  {
+    id: "executar-implementacoes",
+    label: "Implementações",
+    grupo: "Executar",
+    color: "#22c55e",
+    bg: "#22c55e18",
+    desc: "Go live e acompanhamento inicial",
+    step: "executar-implementacoes",
+  },
+  {
+    id: "executar",
+    label: "Ongoing",
+    grupo: "Executar",
+    color: "#10b981",
+    bg: "#10b98118",
+    desc: "Execução recorrente / MRR",
+    step: "executar",
+  },
+] as const;
+
+type JornadaId = typeof JORNADA_CATEGORIAS[number]["id"];
+
 function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps) {
   const { activeProducts } = useProducts();
+
+  // Wizard step: 1=categoria, 2=produtos, 3=time
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(() => project ? 3 : 1);
+  const [categoriaId, setCategoriaId] = useState<JornadaId | null>(() => {
+    if (!project?.step) return null;
+    const s = project.step as JornadaId;
+    return JORNADA_CATEGORIAS.find((c) => c.id === s)?.id ?? null;
+  });
+
   const [form, setForm] = useState<ProjectFormData>(() => {
     if (!project) return EMPTY_FORM;
     return {
@@ -1428,6 +1491,15 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
     return { sumMrr, sumInv, sumPadrao, negociado, desconto, pct };
   })();
 
+  const categoriaAtual = JORNADA_CATEGORIAS.find((c) => c.id === categoriaId);
+
+  // Títulos e subtítulos por step
+  const WIZARD_STEPS = [
+    { n: 1, label: "Categoria" },
+    { n: 2, label: "Produtos" },
+    { n: 3, label: "Time" },
+  ];
+
   return (
     <AnimatePresence>
       <motion.div
@@ -1446,9 +1518,33 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
         >
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-border/50">
-            <h2 className="text-base font-bold">
-              {project ? "Editar Projeto" : "Novo Projeto"}
-            </h2>
+            <div>
+              <h2 className="text-base font-bold">
+                {project ? "Editar Projeto" : "Novo Projeto"}
+              </h2>
+              {/* Stepper — só para criação */}
+              {!project && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  {WIZARD_STEPS.map((s, i) => (
+                    <React.Fragment key={s.n}>
+                      <button
+                        type="button"
+                        onClick={() => { if (s.n < wizardStep || (s.n === 2 && categoriaId)) setWizardStep(s.n as 1|2|3); }}
+                        className={`flex items-center gap-1.5 text-[11px] font-medium transition-colors ${
+                          wizardStep === s.n ? "text-foreground" : s.n < wizardStep ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/40 cursor-default"
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${
+                          wizardStep === s.n ? "bg-primary text-primary-foreground" : s.n < wizardStep ? "bg-green-500 text-white" : "bg-border/50 text-muted-foreground"
+                        }`}>{s.n < wizardStep ? "✓" : s.n}</span>
+                        {s.label}
+                      </button>
+                      {i < WIZARD_STEPS.length - 1 && <span className="text-border/50 text-[10px]">›</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-lg hover:bg-secondary/60 flex items-center justify-center text-muted-foreground"
@@ -1457,7 +1553,164 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
             </button>
           </div>
 
-          {/* Form */}
+          {/* ════════════════════════════════
+              PASSO 1 — Categoria
+          ════════════════════════════════ */}
+          {wizardStep === 1 && (
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              <p className="text-sm text-muted-foreground">Selecione a categoria do projeto:</p>
+              <div className="grid grid-cols-1 gap-3">
+                {JORNADA_CATEGORIAS.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => { setCategoriaId(cat.id); setWizardStep(2); set("step" as keyof ProjectFormData, cat.step as ProjectFormData[keyof ProjectFormData]); }}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
+                      categoriaId === cat.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border/40 hover:border-border/80 hover:bg-secondary/30"
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: cat.bg }}>
+                      <Layers size={16} style={{ color: cat.color }} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{cat.label}
+                        <span className="ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded"
+                          style={{ color: cat.color, backgroundColor: cat.bg }}>{cat.grupo}</span>
+                      </p>
+                      <p className="text-[11px] text-muted-foreground/70">{cat.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ════════════════════════════════
+              PASSO 2 — Produtos
+          ════════════════════════════════ */}
+          {wizardStep === 2 && (
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+
+              {/* Produtos selecionados */}
+              {(form.produtos ?? []).length > 0 && (
+                <div className="space-y-1.5">
+                  {(form.produtos ?? []).map((nome) => {
+                    const prod     = activeProducts.find((p) => p.name === nome);
+                    const isRec    = prod?.billing_type === "recurring";
+                    const padrao   = prod?.default_price ?? 0;
+                    const negoc    = produtoValores[nome] ?? padrao;
+                    const descItem = padrao > negoc ? padrao - negoc : 0;
+                    const pctItem  = padrao > 0 ? Math.round((descItem / padrao) * 100) : 0;
+                    return (
+                      <div key={nome} className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium truncate">{nome}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                              style={{ color: isRec ? "#22c55e" : "#f59e0b", backgroundColor: isRec ? "#22c55e18" : "#f59e0b18" }}>
+                              {isRec ? "Recorrente" : "One-time"}
+                            </span>
+                          </div>
+                          {descItem > 0 && (
+                            <p className="text-[10px] text-orange-400/80 mt-0.5">
+                              Desconto: {formatPrice(descItem)} ({pctItem}% off — tabela {formatPrice(padrao)})
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-xs text-muted-foreground">R$</span>
+                          <input
+                            type="number" min={0} step={1}
+                            value={negoc || ""}
+                            placeholder={String(padrao || 0)}
+                            onChange={(e) => setProdutoValor(nome, parseFloat(e.target.value) || 0)}
+                            className="w-24 bg-background border border-border/60 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 text-right"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="text-[10px] text-muted-foreground/60">{isRec ? "/mês" : "único"}</span>
+                        </div>
+                        <button type="button" onClick={() => toggleProduto(nome)}
+                          className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {/* Totalizador */}
+                  <div className="flex items-center justify-between px-1 pt-1 text-[11px] text-muted-foreground">
+                    <span>
+                      {prodSummary.sumMrr > 0 && <><strong className="text-foreground">{formatPrice(prodSummary.sumMrr)}/mês</strong></>}
+                      {prodSummary.sumMrr > 0 && prodSummary.sumInv > 0 && " + "}
+                      {prodSummary.sumInv > 0 && <><strong className="text-foreground">{formatPrice(prodSummary.sumInv)}</strong> one-time</>}
+                    </span>
+                    {prodSummary.desconto > 0 && (
+                      <span className="text-orange-400 font-medium">
+                        Desconto total: {formatPrice(prodSummary.desconto)} ({prodSummary.pct}%)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Busca para adicionar */}
+              {activeProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground/60 py-4 text-center">Nenhum produto no catálogo.</p>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                    <input type="text" placeholder="Buscar e adicionar produto..."
+                      value={prodSearch}
+                      onChange={(e) => setProdSearch(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 text-xs bg-secondary/40 border border-border/60 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/40"
+                    />
+                  </div>
+                  {prodSearch && (() => {
+                    const q = prodSearch.toLowerCase().trim();
+                    const visible = activeProducts.filter((p) =>
+                      p.name.toLowerCase().includes(q) && !(form.produtos ?? []).includes(p.name)
+                    );
+                    if (visible.length === 0) return <p className="text-xs text-muted-foreground/50 py-1.5 text-center">Nenhum produto encontrado</p>;
+                    return (
+                      <div className="space-y-1 max-h-52 overflow-y-auto">
+                        {visible.map((prod) => {
+                          const isRec = prod.billing_type === "recurring";
+                          return (
+                            <button key={prod.id} type="button"
+                              onClick={() => { toggleProduto(prod.name); setProdSearch(""); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-border/40 bg-secondary/20 hover:border-primary/30 hover:bg-primary/5 transition-colors text-left"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-medium truncate">{prod.name}</span>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                                    style={{ color: isRec ? "#22c55e" : "#f59e0b", backgroundColor: isRec ? "#22c55e18" : "#f59e0b18" }}>
+                                    {isRec ? "Recorrente" : "One-time"}
+                                  </span>
+                                </div>
+                                {prod.default_price > 0 && (
+                                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">Tabela: {formatPrice(prod.default_price)}{isRec ? "/mês" : ""}</p>
+                                )}
+                              </div>
+                              <Plus size={13} className="text-muted-foreground flex-shrink-0" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ════════════════════════════════
+              PASSO 3 — Time + detalhes
+          ════════════════════════════════ */}
+          {(wizardStep === 3 || !!project) && (
           <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-5">
 
             {/* ── Informações Básicas ── */}
@@ -1844,28 +2097,52 @@ function FormModal({ project, onClose, onSave, clients, squads }: FormModalProps
               </div>
             )}
           </form>
+          )}
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 p-4 border-t border-border/50">
+          <div className="flex items-center justify-between gap-2 p-4 border-t border-border/50">
+            {/* Voltar */}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                if (!project && wizardStep > 1) setWizardStep((s) => (s - 1) as 1|2|3);
+                else onClose();
+              }}
               className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-secondary/60 transition-colors"
             >
-              Cancelar
+              {!project && wizardStep > 1 ? "← Voltar" : "Cancelar"}
             </button>
-            <button
-              type="submit"
-              form="project-form"
-              onClick={handleSubmit}
-              disabled={saving}
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {saving && (
-                <span className="w-3.5 h-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-              )}
-              {project ? "Salvar Alterações" : "Criar Projeto"}
-            </button>
+
+            {/* Avançar / Salvar */}
+            {!project && wizardStep === 1 && (
+              <button type="button"
+                disabled={!categoriaId}
+                onClick={() => setWizardStep(2)}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
+              >
+                Próximo →
+              </button>
+            )}
+            {!project && wizardStep === 2 && (
+              <button type="button"
+                disabled={(form.produtos ?? []).length === 0}
+                onClick={() => setWizardStep(3)}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
+              >
+                Próximo →
+              </button>
+            )}
+            {(!!project || wizardStep === 3) && (
+              <button
+                type="submit"
+                onClick={handleSubmit}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {saving && <span className="w-3.5 h-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />}
+                {project ? "Salvar Alterações" : "Criar Projeto"}
+              </button>
+            )}
           </div>
         </motion.div>
       </motion.div>

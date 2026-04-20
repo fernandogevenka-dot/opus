@@ -70,6 +70,8 @@ export interface ProjectFormData {
   client_id?: string;
   squad_id?: string;
   squad_name?: string;
+  // Jornada/categoria do projeto: saber | ter | executar | executar-onboarding | executar-implementacoes
+  step?: string;
   mrr?: number;
   investimento?: number;
   margem_bruta?: number;
