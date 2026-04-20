@@ -60,6 +60,11 @@ export interface Project {
   semana_ritmo?: number | null;
   // Jornada HOps
   jornada_fase?: string | null;
+  // Campos de detalhe (estilo HOps)
+  escopo?: string | null;
+  observacoes?: string | null;
+  tier?: string | null;
+  saude?: "saudavel" | "atencao" | "critico" | null;
   created_at: string;
   updated_at: string;
   // Joined

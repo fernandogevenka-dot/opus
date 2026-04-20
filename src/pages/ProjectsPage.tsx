@@ -10,6 +10,7 @@ import {
 } from "@/hooks/useProjects";
 import { JornadaKanban } from "@/components/projects/JornadaKanban";
 import type { JornadaConfig } from "@/components/projects/JornadaKanban";
+import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
 import {
   useProducts,
   PRODUCT_CATEGORIES,
@@ -2847,6 +2848,7 @@ export function ProjectsPage() {
 
   // Actions
   function openDetail(p: Project) { setDetailProject(p); }
+  function closeDetail() { setDetailProject(null); }
   function openEdit(p: Project) { setDetailProject(null); setEditProject(p); }
   function openNew() { setEditProject(null); }
   function closeEdit() { setEditProject(undefined); }
@@ -2865,7 +2867,7 @@ export function ProjectsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-hidden gap-2">
+    <div className="relative flex flex-col h-full overflow-hidden gap-2">
 
       {/* ── Top bar: jornada tabs + filters + new button ── */}
       <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
@@ -3016,9 +3018,21 @@ export function ProjectsPage() {
         </div>
       )}
 
-      {/* ── Detail Modal ── */}
+      {/* ── Detail Page (full-screen overlay) ── */}
       {detailProject && (
-        <DetailModal project={detailProject} onClose={() => setDetailProject(null)} onEdit={() => openEdit(detailProject)} />
+        <div className="absolute inset-0 z-30 bg-background">
+          <ProjectDetailPage
+            project={detailProject}
+            jornadaColor={activeConfig.color}
+            jornadaFases={activeConfig.colunas}
+            onBack={closeDetail}
+            onEdit={() => openEdit(detailProject)}
+            onFaseChange={updateJornadaFase}
+            onProjectUpdate={(update) =>
+              setDetailProject((prev) => prev ? { ...prev, ...update } : prev)
+            }
+          />
+        </div>
       )}
 
       {/* ── Form Modal ── */}
