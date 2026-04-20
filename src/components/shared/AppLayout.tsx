@@ -11,7 +11,7 @@ import {
   LayoutGrid, LogOut, User, Bell, Zap, HeartHandshake,
   Settings2, Armchair, ChevronDown, Users, MessageCircle,
   Briefcase, Shield, UserCheck, ClipboardList, Package,
-  ShieldCheck, Lightbulb, Activity, GraduationCap, Box, Settings, CalendarDays,
+  ShieldCheck, Lightbulb, Activity, CalendarDays,
 } from "lucide-react";
 import { getStatusColor, getLevelName, getXPForNextLevel, formatXP } from "@/lib/utils";
 import { KnockNotificationBanner } from "@/components/shared/KnockNotificationBanner";
@@ -46,9 +46,6 @@ const ALL_NAV_GROUPS: NavGroup[] = [
       { id: "mbr",           label: "MBR",                icon: <CalendarDays size={15} /> },
       { id: "cs",            label: "Clientes",           icon: <HeartHandshake size={15} /> },
       { id: "projects",      label: "Projetos",           icon: <Briefcase size={15} /> },
-      { id: "saber",         label: "Saber",              icon: <GraduationCap size={15} /> },
-      { id: "ter",           label: "Ter",                icon: <Box size={15} /> },
-      { id: "executar",      label: "Executar",           icon: <Settings size={15} /> },
       { id: "products",      label: "Produtos",           icon: <Package size={15} /> },
       { id: "checkins",      label: "Inteligência",       icon: <ClipboardList size={15} /> },
       { id: "wa-cs",         label: "WhatsApp CS",        icon: <MessageCircle size={15} /> },
@@ -85,10 +82,12 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-const STEP_SUB_ITEMS: { id: ProjectsSetor; label: string; icon: React.ReactNode; color: string }[] = [
-  { id: "saber",    label: "Saber",    icon: <GraduationCap size={12} />, color: "#8b5cf6" },
-  { id: "ter",      label: "Ter",      icon: <Box size={12} />,           color: "#06b6d4" },
-  { id: "executar", label: "Executar", icon: <Settings size={12} />,      color: "#22c55e" },
+const STEP_SUB_ITEMS: { id: ProjectsSetor; label: string; color: string }[] = [
+  { id: "saber",                  label: "Diagnósticos",  color: "#8b5cf6" },
+  { id: "ter",                    label: "Implementação", color: "#06b6d4" },
+  { id: "executar-onboarding",    label: "Onboarding",    color: "#22c55e" },
+  { id: "executar-implementacoes",label: "Implementações",color: "#f59e0b" },
+  { id: "executar",               label: "Ongoing",       color: "#10b981" },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -203,16 +202,14 @@ export function AppLayout({ children }: AppLayoutProps) {
                   {groupItems.map((item) => {
                     const isActive = currentPage === item.id;
                     const showSub = item.id === "projects" && (isActive || projectsSetor !== "");
-                    const stepColor = item.id === "saber" ? "#8b5cf6" : item.id === "ter" ? "#06b6d4" : item.id === "executar" ? "#22c55e" : null;
+                    const stepColor: string | null = null;
                     return (
                       <div key={item.id}>
                         <button
                           onClick={() => {
                             setCurrentPage(item.id as AppPage);
-                            // Ao clicar em Projetos, limpa o setor para mostrar todos
-                            if (item.id === "projects") setProjectsSetor("");
-                            // Saber/Ter/Executar standalone não usam projectsSetor
-                            if (!["projects"].includes(item.id)) setProjectsSetor("");
+                            // When navigating to Projetos, default to first jornada if no tab selected
+                            if (item.id === "projects" && !projectsSetor) setProjectsSetor("saber");
                           }}
                           className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all text-left ${
                             isActive
@@ -244,7 +241,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                           )}
                         </button>
 
-                        {/* STEP sub-menu under Projetos */}
+                        {/* Jornada sub-menu under Projetos */}
                         {item.id === "projects" && isActive && (
                           <div className="ml-4 mt-0.5 mb-1 pl-3 border-l border-white/10 space-y-0.5">
                             {STEP_SUB_ITEMS.map((sub) => {
@@ -252,23 +249,18 @@ export function AppLayout({ children }: AppLayoutProps) {
                               return (
                                 <button
                                   key={sub.id}
-                                  onClick={() => setProjectsSetor(subActive ? "" : sub.id)}
+                                  onClick={() => setProjectsSetor(sub.id)}
                                   className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-left ${
                                     subActive
                                       ? "bg-white/8 text-white"
                                       : "text-white/35 hover:text-white/70 hover:bg-white/5"
                                   }`}
                                 >
-                                  <span style={{ color: subActive ? sub.color : undefined }}>
-                                    {sub.icon}
-                                  </span>
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: subActive ? sub.color : "#4b5563" }}
+                                  />
                                   <span className="flex-1">{sub.label}</span>
-                                  {subActive && (
-                                    <span
-                                      className="w-1 h-1 rounded-full flex-shrink-0"
-                                      style={{ backgroundColor: sub.color }}
-                                    />
-                                  )}
                                 </button>
                               );
                             })}

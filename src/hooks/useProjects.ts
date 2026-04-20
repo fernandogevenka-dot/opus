@@ -58,6 +58,8 @@ export interface Project {
   proxima_entrega?: string | null;
   semana_atual?: number | null;
   semana_ritmo?: number | null;
+  // Jornada HOps
+  jornada_fase?: string | null;
   created_at: string;
   updated_at: string;
   // Joined
@@ -87,6 +89,8 @@ export interface ProjectFormData {
   contract_duration?: string;
   // Desconto total aplicado nos produtos (valor absoluto)
   desconto_total?: number;
+  // Fase dentro da jornada HOps
+  jornada_fase?: string | null;
   produtos?: string[];
   pasta_publica?: string;
   pasta_privada?: string;
@@ -214,10 +218,10 @@ export function useProjects() {
 
     // Se o erro for de coluna inexistente (contract_duration / desconto_total ainda não migrados),
     // tenta novamente sem esses campos para não bloquear o usuário
-    if (err && (err.message?.includes("contract_duration") || err.message?.includes("desconto_total") || err.code === "PGRST204" || err.code === "42703")) {
+    if (err && (err.message?.includes("contract_duration") || err.message?.includes("desconto_total") || err.message?.includes("jornada_fase") || err.code === "PGRST204" || err.code === "42703")) {
       console.warn("saveProject: coluna nova ausente no banco, salvando sem ela:", err.message);
-      const { contract_duration: _cd, desconto_total: _dt, ...payloadFallback } = payload as typeof payload & { contract_duration?: unknown; desconto_total?: unknown };
-      void _cd; void _dt;
+      const { contract_duration: _cd, desconto_total: _dt, jornada_fase: _jf, ...payloadFallback } = payload as typeof payload & { contract_duration?: unknown; desconto_total?: unknown; jornada_fase?: unknown };
+      void _cd; void _dt; void _jf;
       const res2 = await tryUpdate(payloadFallback as Record<string, unknown>);
       err = res2.error;
     }
@@ -243,6 +247,15 @@ export function useProjects() {
       .eq("id", id);
     if (err) throw err;
     setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, momento } : p)));
+  }, []);
+
+  const updateJornadaFase = useCallback(async (id: string, fase: string | null) => {
+    const { error: err } = await supabase
+      .from("projects")
+      .update({ jornada_fase: fase, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (err) throw err;
+    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, jornada_fase: fase } : p)));
   }, []);
 
   const updateFase = useCallback(async (id: string, field: "fase_ter" | "fase_saber", value: string | null) => {
@@ -277,5 +290,6 @@ export function useProjects() {
     deleteProject,
     updateMomento,
     updateFase,
+    updateJornadaFase,
   };
 }

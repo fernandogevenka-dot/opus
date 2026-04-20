@@ -1268,7 +1268,7 @@ function ClientDetailSidebar({
                   const encerrados = projects.filter((p) => !ACTIVE_MOMENTOS.includes(p.momento as never));
 
                   // Receita recorrente: projetos Executar ativos → mrr
-                  const ativosExecutar = ativos.filter((p) => !p.step || p.step.toLowerCase() === "executar");
+                  const ativosExecutar = ativos.filter((p) => !p.step || p.step.toLowerCase().startsWith("executar"));
                   const receitaRecorrente = ativosExecutar.reduce((s, p) => s + (p.mrr ?? 0), 0);
 
                   // One-time ativo: Saber (EE) + Ter (investimento)
@@ -1284,7 +1284,7 @@ function ClientDetailSidebar({
                       .reduce((s, p) => s + (p.estruturacao_estrategica ?? p.mrr ?? 0), 0) +
                     encerrados.filter((p) => p.step?.toLowerCase() === "ter")
                       .reduce((s, p) => s + (p.investimento ?? p.mrr ?? 0), 0) +
-                    encerrados.filter((p) => !p.step || p.step.toLowerCase() === "executar")
+                    encerrados.filter((p) => !p.step || p.step.toLowerCase().startsWith("executar"))
                       .reduce((s, p) => s + (p.mrr ?? 0), 0);
 
                   return (
@@ -1329,7 +1329,7 @@ function ClientDetailSidebar({
                               <div className="text-right flex-shrink-0 ml-3">
                                 {(() => {
                                   const s = p.step?.toLowerCase();
-                                  const isRecorrente = !s || s === "executar";
+                                  const isRecorrente = !s || s.startsWith("executar");
                                   const valor = s === "saber" ? (p.estruturacao_estrategica ?? p.mrr ?? 0)
                                     : s === "ter" ? (p.investimento ?? p.mrr ?? 0)
                                     : (p.mrr ?? 0);

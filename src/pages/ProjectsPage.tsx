@@ -8,6 +8,8 @@ import {
   type ProjectFormData,
   type ProjectMomento,
 } from "@/hooks/useProjects";
+import { JornadaKanban } from "@/components/projects/JornadaKanban";
+import type { JornadaConfig } from "@/components/projects/JornadaKanban";
 import {
   useProducts,
   PRODUCT_CATEGORIES,
@@ -2699,36 +2701,112 @@ function ProductCatalogTab() {
   );
 }
 
+// ─── Jornada configs ─────────────────────────────────────────────────────────
+
+const JORNADA_CONFIGS: JornadaConfig[] = [
+  {
+    title: "Diagnósticos",
+    step: "saber",
+    color: "#8b5cf6",
+    colunas: [
+      "Início",
+      "Kickoff",
+      "Execução - Diagnóstico e Planejamento",
+      "Entrega final & proposta",
+      "Follow-up e Negociação",
+      "Concluído",
+    ],
+    encerradas: new Set(["Concluído"]),
+  },
+  {
+    title: "Implementação",
+    step: "ter",
+    color: "#06b6d4",
+    colunas: [
+      "Handover, Onboarding",
+      "Setup e Desenvolvimento",
+      "Go Live e Ativação",
+      "Monitoramento, suporte e conclusão",
+    ],
+    encerradas: new Set(["Monitoramento, suporte e conclusão"]),
+  },
+  {
+    title: "Onboarding",
+    step: "executar-onboarding",
+    color: "#22c55e",
+    colunas: [
+      "Embarque (Growth Class)",
+      "Kick-off",
+      "Setup Inicial",
+      "Planejamento de marketing",
+      "Validação interna",
+      "Apresentação ao cliente",
+      "Encerramento e feedback",
+    ],
+    encerradas: new Set(["Encerramento e feedback"]),
+  },
+  {
+    title: "Implementações",
+    step: "executar-implementacoes",
+    color: "#f59e0b",
+    colunas: [
+      "Setup de implementação",
+      "Revisão pré-Go Live",
+      "Go live",
+      "Primeiro check-in [Interno]",
+      "Primeiro check-in [Revisão]",
+      "Primeiro check-in [Cliente]",
+      "Execução e ajustes",
+      "Replanejamento mensal",
+      "Check-in mensal/replanejamento [Revisão]",
+      "Check-in mensal/replanejamento [Cliente]",
+      "Encerramento",
+    ],
+    encerradas: new Set(["Encerramento"]),
+  },
+  {
+    title: "Ongoing",
+    step: "executar",
+    color: "#10b981",
+    colunas: [
+      "DO - Execução",
+      "CHECK - Controle de qualidade",
+      "ACT - Otimizações e ajustes",
+      "PLAN - Replanejamento mensal",
+      "Check-in [Revisão]",
+      "Check-in [Cliente]",
+      "Projeto encerrado",
+    ],
+    encerradas: new Set(["Projeto encerrado"]),
+  },
+];
+
+type JornadaTab = typeof JORNADA_CONFIGS[number]["step"];
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type ViewMode = "kanban" | "list";
-
 export function ProjectsPage() {
-  const { projects, loading, error, stats, saveProject, deleteProject, updateFase } = useProjects();
+  const { projects, loading, error, saveProject, deleteProject, updateJornadaFase } = useProjects();
   const clients = useClientOptions();
   const squads = useSquadOptions();
 
-  // Sync filterSetor / clientFilter with sidebar store
+  // Active jornada tab — driven by sidebar store
   const { projectsSetor, setProjectsSetor, projectsClientFilter, setProjectsClientFilter } = useAppStore();
 
-  // UI state
-  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  // Map sidebar store value to jornada tab (default to first jornada)
+  const activeTab: JornadaTab = (projectsSetor as JornadaTab) || "saber";
+  const setActiveTab = (tab: JornadaTab) => setProjectsSetor(tab as import("@/store/appStore").ProjectsSetor);
+
+  const activeConfig = JORNADA_CONFIGS.find((c) => c.step === activeTab) ?? JORNADA_CONFIGS[0];
+
+  // Filters
   const [search, setSearch] = useState("");
-  const [filterMomento, setFilterMomento] = useState<string>("");
   const [filterSquad, setFilterSquad] = useState<string>("");
   const [filterDupla, setFilterDupla] = useState<string>("");
-  // Filtro de mês — formato "YYYY-MM", vazio = mês atual
-  const [filterMes, setFilterMes] = useState<string>("");
-  // Inativos ocultos por padrão
-  const [showInactive, setShowInactive] = useState(false);
-
-  // filterSetor is driven by sidebar; local pills also write to the store
-  const filterSetor = projectsSetor as SetorId | "";
-  const setFilterSetor = (val: SetorId | "") => setProjectsSetor(val as import("@/store/appStore").ProjectsSetor);
 
   // Modal state
   const [detailProject, setDetailProject] = useState<Project | null>(null);
-  const [editProject, setEditProject] = useState<Project | null | undefined>(undefined); // undefined = closed, null = new
+  const [editProject, setEditProject] = useState<Project | null | undefined>(undefined);
   const [deleteConfirm, setDeleteConfirm] = useState<Project | null>(null);
 
   // Unique squads from projects for filter
@@ -2737,163 +2815,7 @@ export function ProjectsPage() {
     return Array.from(names).sort() as string[];
   }, [projects]);
 
-  // Conta inativos antes de filtrar (para exibir no toggle)
-  const inactiveCount = useMemo(
-    () => projects.filter((p) => !ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length,
-    [projects]
-  );
-
-  // Filtered projects
-  const filtered = useMemo(() => {
-    return projects.filter((p) => {
-      // Filtro por cliente (navegação de Clientes → Projetos)
-      if (projectsClientFilter && p.client_id !== projectsClientFilter) return false;
-
-      // Oculta inativos/encerrados por padrão
-      const isInative = !ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento);
-      if (!showInactive && isInative) return false;
-
-      const q = search.toLowerCase();
-      const matchSearch =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        (p.client_name ?? "").toLowerCase().includes(q) ||
-        (p.squad_name ?? "").toLowerCase().includes(q);
-      const matchMomento = !filterMomento || p.momento === filterMomento;
-      const matchSquad = !filterSquad || p.squad_name === filterSquad;
-      const matchDupla = !filterDupla || p.gestor_projeto === filterDupla || p.gestor_trafego === filterDupla;
-      // Setor: verifica se algum produto do projeto pertence ao setor selecionado
-      const matchSetor = !filterSetor || (() => {
-        const setor = getProjectSetor(p);
-        // Se não tem produto mapeado mas o setor é "executar", considera pelo MRR
-        if (!setor && filterSetor === "executar" && (p.mrr ?? 0) > 0) return true;
-        return setor === filterSetor;
-      })();
-      return matchSearch && matchMomento && matchSquad && matchDupla && matchSetor;
-    });
-  }, [projects, search, filterMomento, filterSquad, filterDupla, filterSetor, showInactive, projectsClientFilter]);
-
-  // Meses disponíveis para o filtro (baseado em start_date dos projetos)
-  const mesOptions = useMemo(() => {
-    const now = new Date();
-    const meses: { value: string; label: string }[] = [];
-    for (let i = 0; i < 13; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-      meses.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
-    }
-    return meses;
-  }, []);
-
-  // Projetos ativos no mês selecionado (ou mês atual se vazio)
-  const filteredByMes = useMemo(() => {
-    const mesRef = filterMes || mesOptions[0]?.value;
-    if (!mesRef) return filtered;
-    const [year, month] = mesRef.split("-").map(Number);
-    const mesInicio = new Date(year, month - 1, 1);
-    const mesFim = new Date(year, month, 0, 23, 59, 59);
-    return filtered.filter((p) => {
-      if (!p.start_date) return false;
-      const start = new Date(p.start_date);
-      const end = p.end_date ? new Date(p.end_date) : p.churn_date ? new Date(p.churn_date) : null;
-      // Projeto estava ativo nesse mês: iniciou antes do fim do mês e não encerrou antes do início
-      return start <= mesFim && (!end || end >= mesInicio);
-    });
-  }, [filtered, filterMes, mesOptions]);
-
-  // Stats dinâmicas baseadas no filtro atual e setor
-  const filteredStats = useMemo(() => {
-    const base = filteredByMes;
-    const activeFiltered = base.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento));
-    const churnedFiltered = base.filter((p) => !!p.churn_date);
-
-    // KPIs adaptativos por setor:
-    // Executar → só MRR (receita recorrente)
-    // Saber    → Estruturação Estratégica (receita do projeto EE)
-    // Ter      → Investimento (receita do projeto one-time)
-    // Todos    → MRR + EE + Variável
-    let receitaLabel = "Receita";
-    let receitaTotal = 0;
-    if (filterSetor === "executar") {
-      receitaLabel = "MRR";
-      receitaTotal = activeFiltered.reduce((s, p) => s + (p.mrr ?? 0), 0);
-    } else if (filterSetor === "saber") {
-      receitaLabel = "Receita EE";
-      receitaTotal = base.reduce((s, p) => s + (p.estruturacao_estrategica ?? 0), 0);
-    } else if (filterSetor === "ter") {
-      receitaLabel = "Receita Projetos";
-      receitaTotal = base.reduce((s, p) => s + (p.investimento ?? 0) + (p.mrr ?? 0), 0);
-    } else {
-      receitaLabel = "Receita Total";
-      receitaTotal = base.reduce((s, p) => s + (p.mrr ?? 0) + (p.estruturacao_estrategica ?? 0) + (p.variavel ?? 0), 0);
-    }
-
-    const mrrAtivo = activeFiltered.reduce((sum, p) => sum + (p.mrr ?? 0), 0);
-    const churnFinanceiro = churnedFiltered.reduce((sum, p) => sum + (p.mrr ?? 0), 0);
-
-    return {
-      total: base.length,
-      active: activeFiltered.length,
-      totalProjetos: base.length,
-      receitaTotal,
-      receitaLabel,
-      mrrAtivo,
-      churnFinanceiro,
-      showMRR: filterSetor !== "executar", // Executar não mostra MRR separado (já é a métrica principal)
-      showChurn: filterSetor !== "saber" && filterSetor !== "ter",
-    };
-  }, [filteredByMes, filterSetor]);
-
-  // Kanban grouping
-  const kanbanColumns = useMemo(() => {
-    const active = ACTIVE_MOMENTOS.map((m) => ({
-      title: m,
-      projects: filtered.filter((p) => p.momento === m),
-      isInactive: false,
-    })).filter((col) => col.projects.length > 0); // oculta colunas ativas vazias
-    const inactiveProjects = filtered.filter(
-      (p) => !ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)
-    );
-    // Só mostra coluna de inativos se tiver projetos
-    if (inactiveProjects.length > 0) {
-      return [
-        ...active,
-        { title: "Inativos / Encerrados", projects: inactiveProjects, isInactive: true },
-      ];
-    }
-    return active;
-  }, [filtered]);
-
-  // Actions
-  function openDetail(p: Project) {
-    setDetailProject(p);
-  }
-
-  function openEdit(p: Project) {
-    setDetailProject(null);
-    setEditProject(p);
-  }
-
-  function openNew() {
-    setEditProject(null);
-  }
-
-  function closeEdit() {
-    setEditProject(undefined);
-  }
-
-  async function handleSave(data: ProjectFormData, id?: string) {
-    await saveProject(data, id);
-  }
-
-  async function confirmDelete(p: Project) {
-    await deleteProject(p.id);
-    setDeleteConfirm(null);
-  }
-
-
-  // Duplas disponíveis — só gestores de projetos ativos, sem "(inativo)" no nome
+  // Duplas disponíveis
   const duplaOptions = useMemo(() => {
     const names = new Set(
       projects
@@ -2904,63 +2826,82 @@ export function ProjectsPage() {
     return Array.from(names).sort();
   }, [projects]);
 
+  // Filtered projects for active tab
+  const filtered = useMemo(() => {
+    return projects.filter((p) => {
+      if (p.step !== activeTab) return false;
+      // Filtro por cliente (navegação de Clientes → Projetos)
+      if (projectsClientFilter && p.client_id !== projectsClientFilter) return false;
+
+      const q = search.toLowerCase();
+      const matchSearch =
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        (p.client_name ?? "").toLowerCase().includes(q) ||
+        (p.squad_name ?? "").toLowerCase().includes(q);
+      const matchSquad = !filterSquad || p.squad_name === filterSquad;
+      const matchDupla = !filterDupla || p.gestor_projeto === filterDupla || p.gestor_trafego === filterDupla;
+      return matchSearch && matchSquad && matchDupla;
+    });
+  }, [projects, activeTab, search, filterSquad, filterDupla, projectsClientFilter]);
+
+  // Actions
+  function openDetail(p: Project) { setDetailProject(p); }
+  function openEdit(p: Project) { setDetailProject(null); setEditProject(p); }
+  function openNew() { setEditProject(null); }
+  function closeEdit() { setEditProject(undefined); }
+  async function handleSave(data: ProjectFormData, id?: string) { await saveProject(data, id); }
+  async function confirmDelete(p: Project) { await deleteProject(p.id); setDeleteConfirm(null); }
+
+  // Counts per jornada for tab badges
+  const countPerStep = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const cfg of JORNADA_CONFIGS) {
+      map[cfg.step] = projects.filter((p) => p.step === cfg.step && ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length;
+    }
+    return map;
+  }, [projects]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ gap: "6px" }}>
+    <div className="flex flex-col h-full overflow-hidden gap-2">
 
-      {/* ── Row 1: STEP pills + New button ── */}
-      <div className="flex-shrink-0 flex items-center gap-3 min-h-0">
-        {/* STEP pills */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setFilterSetor("")}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-              filterSetor === "" ? "bg-foreground/10 border-foreground/20 text-foreground" : "border-border/40 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Todos <span className="opacity-60">({projects.filter((p) => ACTIVE_MOMENTOS.includes(p.momento as ProjectMomento)).length})</span>
-          </button>
-          {(["saber", "ter", "executar"] as const).map((sid) => {
-            const count = projects.filter((p) => getProjectSetor(p) === sid).length;
-            const isActive = filterSetor === sid;
+      {/* ── Top bar: jornada tabs + filters + new button ── */}
+      <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
+
+        {/* Jornada tabs */}
+        <div className="flex items-center gap-0.5 bg-secondary/30 border border-border/40 rounded-xl p-0.5">
+          {JORNADA_CONFIGS.map((cfg) => {
+            const isActive = activeTab === cfg.step;
             return (
-              <button key={sid} onClick={() => setFilterSetor(isActive ? "" : sid)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${isActive ? "bg-foreground/10 border-foreground/20 text-foreground" : "border-border/40 text-muted-foreground hover:text-foreground"}`}
+              <button
+                key={cfg.step}
+                onClick={() => setActiveTab(cfg.step as JornadaTab)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
               >
-                {sid.charAt(0).toUpperCase() + sid.slice(1)} <span className="opacity-70">({count})</span>
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: isActive ? cfg.color : "#6b7280" }}
+                />
+                {cfg.title}
+                {countPerStep[cfg.step] > 0 && (
+                  <span className={`text-[10px] font-semibold ${isActive ? "text-foreground/60" : "text-muted-foreground/50"}`}>
+                    {countPerStep[cfg.step]}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
-        <div className="flex-1" />
-        <button onClick={openNew}
-          className="flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors flex-shrink-0"
-        >
-          <Plus size={13} />
-          Novo Projeto
-        </button>
-      </div>
+        <div className="w-px h-5 bg-border/50 flex-shrink-0" />
 
-      {<>
-
-      {/* ── Banner filtro por cliente ── */}
-      {projectsClientFilter && (
-        <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium">
-          <Users size={12} />
-          <span>Projetos do cliente: {filtered[0]?.client_name ?? "..."}</span>
-          <button onClick={() => setProjectsClientFilter(null)} className="ml-auto w-5 h-5 flex items-center justify-center rounded hover:bg-primary/20">
-            <X size={10} />
-          </button>
-        </div>
-      )}
-
-      {/* ── Row 2: Filtros em linha única ── */}
-      <div className="flex-shrink-0 flex items-center gap-2">
-
+        {/* Filters */}
         {/* Squad */}
-        <div className="relative flex-1 min-w-0">
+        <div className="relative min-w-[120px]">
           <select value={filterSquad} onChange={(e) => setFilterSquad(e.target.value)}
             className="h-8 w-full px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7"
           >
@@ -2970,32 +2911,19 @@ export function ProjectsPage() {
           <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         </div>
 
-        {/* Etapa Jornada */}
-        <div className="relative flex-1 min-w-0">
-          <select value={filterMomento} onChange={(e) => setFilterMomento(e.target.value)}
-            className="h-8 w-full px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7"
-          >
-            <option value="">Etapa Jornada</option>
-            {MOMENTO_LABELS.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-        </div>
-
         {/* Dupla */}
-        <div className="relative flex-1 min-w-0">
+        <div className="relative min-w-[120px]">
           <select value={filterDupla} onChange={(e) => setFilterDupla(e.target.value)}
             className="h-8 w-full px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7"
           >
-            <option value="">Dupla</option>
+            <option value="">Responsável</option>
             {duplaOptions.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
           <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         </div>
 
-        {/* Busca */}
-        <div className="relative flex-1 min-w-0">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[140px] max-w-xs">
           <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             className="h-8 w-full bg-background border border-border/50 rounded-xl pl-7 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/40"
@@ -3010,94 +2938,38 @@ export function ProjectsPage() {
           )}
         </div>
 
-        {/* Toggle inativos */}
-        <button
-          onClick={() => setShowInactive((v) => !v)}
-          className={`flex items-center gap-1 h-8 px-2.5 rounded-xl border text-xs font-medium transition-all flex-shrink-0 ${
-            showInactive ? "bg-secondary text-foreground border-border/80" : "border-border/50 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {showInactive ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
-          Inativos
-          {inactiveCount > 0 && <span className="opacity-60">({inactiveCount})</span>}
-        </button>
-
-        {/* View toggle */}
-        <div className="flex items-center gap-0.5 bg-background border border-border/50 rounded-xl p-0.5 h-8 flex-shrink-0">
-          <button onClick={() => setViewMode("kanban")}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${viewMode === "kanban" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            title="Kanban"
-          >
-            <LayoutGrid size={13} />
-          </button>
-          <button onClick={() => setViewMode("list")}
-            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${viewMode === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            title="Lista"
-          >
-            <List size={13} />
-          </button>
-        </div>
-
-        {/* Mês */}
-        <div className="relative flex-shrink-0">
-          <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)}
-            className="h-8 px-3 rounded-xl border border-border/50 bg-background text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/30 pr-7 min-w-[130px]"
-          >
-            {mesOptions.map((m, i) => (
-              <option key={m.value} value={i === 0 ? "" : m.value}>{i === 0 ? `${m.label} (atual)` : m.label}</option>
-            ))}
-          </select>
-          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-        </div>
-
-        {/* Limpar filtros */}
-        {(filterMomento || filterSquad || filterDupla || search || filterSetor || filterMes) && (
+        {/* Clear filters */}
+        {(filterSquad || filterDupla || search) && (
           <button
-            onClick={() => { setSearch(""); setFilterMomento(""); setFilterSquad(""); setFilterDupla(""); setFilterSetor(""); setFilterMes(""); }}
+            onClick={() => { setSearch(""); setFilterSquad(""); setFilterDupla(""); }}
             className="flex items-center gap-1 h-8 px-2 text-xs text-muted-foreground hover:text-foreground flex-shrink-0"
           >
             <X size={11} />
           </button>
         )}
+
+        <div className="flex-1" />
+
+        {/* New project button */}
+        <button
+          onClick={openNew}
+          className="flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors flex-shrink-0"
+        >
+          <Plus size={13} />
+          Novo Projeto
+        </button>
       </div>
 
-      {/* ── Row 3: KPIs mini em linha — adaptativos por setor ── */}
-      <div className="flex-shrink-0 grid gap-2" style={{ gridTemplateColumns: filteredStats.showMRR && filteredStats.showChurn ? "repeat(4, 1fr)" : filteredStats.showMRR || filteredStats.showChurn ? "repeat(3, 1fr)" : "repeat(2, 1fr)" }}>
-        <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-medium text-muted-foreground">Projetos</p>
-            <p className="text-base font-bold tracking-tight leading-tight">{filteredStats.totalProjetos}</p>
-          </div>
-          <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">{filteredStats.active} ativos</p>
+      {/* ── Client filter banner ── */}
+      {projectsClientFilter && (
+        <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium">
+          <Users size={12} />
+          <span>Projetos do cliente: {filtered[0]?.client_name ?? "..."}</span>
+          <button onClick={() => setProjectsClientFilter(null)} className="ml-auto w-5 h-5 flex items-center justify-center rounded hover:bg-primary/20">
+            <X size={10} />
+          </button>
         </div>
-        <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-medium text-muted-foreground">{filteredStats.receitaLabel}</p>
-            <p className="text-base font-bold tracking-tight leading-tight">{formatMRR(filteredStats.receitaTotal)}</p>
-          </div>
-          <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">
-            {filterMes ? mesOptions.find(m => m.value === filterMes)?.label.split(" ")[0] : "este mês"}
-          </p>
-        </div>
-        {filteredStats.showMRR && (
-          <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-medium text-muted-foreground">MRR Ativo</p>
-              <p className="text-base font-bold tracking-tight leading-tight">{formatMRR(filteredStats.mrrAtivo)}</p>
-            </div>
-            <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">recorrente</p>
-          </div>
-        )}
-        {filteredStats.showChurn && (
-          <div className="rounded-xl border border-border/50 bg-background px-3 py-2 flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-medium text-muted-foreground">Churn Financeiro</p>
-              <p className="text-base font-bold tracking-tight leading-tight">{formatMRR(filteredStats.churnFinanceiro)}</p>
-            </div>
-            <p className="text-[10px] text-muted-foreground/60 text-right leading-tight">{filtered.filter(p => !!p.churn_date).length} projetos</p>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ── Loading / Error states ── */}
       {loading && (
@@ -3119,63 +2991,27 @@ export function ProjectsPage() {
         </div>
       )}
 
-      {/* ── Content ── */}
+      {/* ── Jornada Kanban ── */}
       {!loading && !error && (
         <div className="flex-1 min-h-0 overflow-hidden">
           <AnimatePresence mode="wait">
-            {/* ── Step Kanban para Ter e Saber ── */}
-            {viewMode === "kanban" && (filterSetor === "ter" || filterSetor === "saber") ? (
-              <motion.div key={`step-kanban-${filterSetor}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-                <StepKanbanBoard
-                  projects={filtered}
-                  tipo={filterSetor as "ter" | "saber"}
-                  onFaseChange={updateFase}
-                  onCardClick={openDetail}
-                  onEdit={openEdit}
-                  onDelete={(p) => setDeleteConfirm(p)}
-                />
-              </motion.div>
-            ) : viewMode === "kanban" ? (
-              <motion.div key="kanban" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="h-full overflow-x-auto overflow-y-hidden"
-              >
-                {kanbanColumns.length === 0 ? (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="text-center text-muted-foreground">
-                      <p className="text-sm font-medium mb-1">Nenhum projeto encontrado</p>
-                      <p className="text-xs opacity-60">Tente ajustar os filtros</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-3 h-full pb-2 px-0.5" style={{ minWidth: "max-content" }}>
-                    {kanbanColumns.map((col) => (
-                      <div key={col.title} className="flex flex-col h-full overflow-y-auto">
-                        <KanbanColumn
-                          title={col.title}
-                          projects={col.projects}
-                          filterSetor={filterSetor}
-                          isInactive={col.isInactive}
-                          onCardClick={openDetail}
-                          onEdit={openEdit}
-                          onDelete={(p) => setDeleteConfirm(p)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            ) : (
-              <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="h-full overflow-y-auto pr-0.5"
-              >
-                <ListView
-                  projects={filtered}
-                  onRowClick={openDetail}
-                  onEdit={openEdit}
-                  onDelete={(p) => setDeleteConfirm(p)}
-                />
-              </motion.div>
-            )}
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full"
+            >
+              <JornadaKanban
+                config={activeConfig}
+                projects={filtered}
+                onCardClick={openDetail}
+                onEdit={openEdit}
+                onDelete={(p) => setDeleteConfirm(p)}
+                onFaseChange={updateJornadaFase}
+              />
+            </motion.div>
           </AnimatePresence>
         </div>
       )}
@@ -3221,7 +3057,6 @@ export function ProjectsPage() {
         )}
       </AnimatePresence>
 
-      </>}
     </div>
   );
 }

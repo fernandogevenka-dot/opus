@@ -73,9 +73,6 @@ const ALL_NAV: NavItem[] = [
   { id: "feature-requests",  label: "Melhorias",         icon: "Lightbulb",    section: "main"  },
   { id: "gtm-cockpit",       label: "GTM Cockpit",        icon: "Activity",     section: "work"  },
   { id: "mbr",               label: "MBR",                icon: "CalendarDays", section: "work"  },
-  { id: "saber",             label: "Saber",              icon: "GraduationCap", section: "work" },
-  { id: "ter",               label: "Ter",                icon: "Box",          section: "work"  },
-  { id: "executar",          label: "Executar",           icon: "Zap",          section: "work"  },
 ];
 
 export function usePermissions(): Permissions {
@@ -107,9 +104,6 @@ export function usePermissions(): Permissions {
       case "feature-requests":
       case "gtm-cockpit":
       case "mbr":
-      case "saber":
-      case "ter":
-      case "executar":
         return true;
       // Depende de permissões
       case "cs":             return true; // todos veem (filtragem é na página)
