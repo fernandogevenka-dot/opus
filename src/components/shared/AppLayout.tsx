@@ -118,9 +118,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   const permissions = usePermissions();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [knockCount, setKnockCount] = useState(0);
-  // Executar sub-menu: auto-expand when an executar setor is active
+  // Executar sub-menu: expand whenever an executar-* setor is active
   const isExecutarActive = projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
   const [executarExpanded, setExecutarExpanded] = useState(isExecutarActive);
+  // Keep expanded in sync when setor changes externally (e.g. sidebar click → kanban tab click)
+  useEffect(() => {
+    if (isExecutarActive) setExecutarExpanded(true);
+  }, [isExecutarActive]);
 
   const myRank = leaderboard.findIndex((e) => e.user_id === user?.id) + 1;
   const xpProgress = user ? getXPForNextLevel(user.xp) : null;

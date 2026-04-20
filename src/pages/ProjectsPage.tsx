@@ -11,6 +11,7 @@ import {
 import { JornadaKanban } from "@/components/projects/JornadaKanban";
 import type { JornadaConfig } from "@/components/projects/JornadaKanban";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
+import { JornadaDash } from "@/components/projects/JornadaDash";
 import {
   useProducts,
   PRODUCT_CATEGORIES,
@@ -2867,10 +2868,24 @@ export function ProjectsPage() {
     return map;
   }, [projects]);
 
+  // Projects for dash: all projects belonging to the active setor category (no search/squad filters)
+  const dashProjects = useMemo(() => {
+    const isExecutar = projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
+    return projects.filter((p) => {
+      if (isExecutar) return p.step === "executar" || p.step === "executar-onboarding" || p.step === "executar-implementacoes";
+      return p.step === activeTab;
+    });
+  }, [projects, projectsSetor, activeTab]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden gap-2">
+
+      {/* ── Dash de métricas ── */}
+      {!loading && !error && (
+        <JornadaDash projects={dashProjects} setor={projectsSetor || activeTab} />
+      )}
 
       {/* ── Top bar: jornada tabs + filters + new button ── */}
       <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
