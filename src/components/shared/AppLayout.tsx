@@ -82,20 +82,32 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-// 3 categorias de produto no menu lateral
-// Clicar em "Executar" define setor "executar" → ProjectsPage default para a 1ª aba executar
-const STEP_SUB_ITEMS: { id: ProjectsSetor; label: string; color: string }[] = [
-  { id: "saber",    label: "Saber",    color: "#8b5cf6" },
-  { id: "ter",      label: "Ter",      color: "#06b6d4" },
-  { id: "executar", label: "Executar", color: "#10b981" },
+// 3 categorias de produto — Executar tem sub-itens
+interface StepSubItem {
+  id: ProjectsSetor;
+  label: string;
+  color: string;
+  children?: { id: ProjectsSetor; label: string }[];
+}
+
+const STEP_SUB_ITEMS: StepSubItem[] = [
+  { id: "saber", label: "Saber", color: "#8b5cf6" },
+  { id: "ter",   label: "Ter",   color: "#06b6d4" },
+  {
+    id: "executar", label: "Executar", color: "#10b981",
+    children: [
+      { id: "executar-onboarding",     label: "Onboarding"     },
+      { id: "executar-implementacoes", label: "Implementações" },
+      { id: "executar",                label: "Ongoing"        },
+    ],
+  },
 ];
 
-// Helper: considera ativo se o setor salvo pertence à categoria
-function isSubActive(sub: ProjectsSetor, current: ProjectsSetor): boolean {
-  if (sub === "executar") {
+function isSubActive(id: ProjectsSetor, current: ProjectsSetor): boolean {
+  if (id === "executar") {
     return current === "executar" || current === "executar-onboarding" || current === "executar-implementacoes";
   }
-  return current === sub;
+  return current === id;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -106,6 +118,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const permissions = usePermissions();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [knockCount, setKnockCount] = useState(0);
+  // Executar sub-menu: auto-expand when an executar setor is active
+  const isExecutarActive = projectsSetor === "executar" || projectsSetor === "executar-onboarding" || projectsSetor === "executar-implementacoes";
+  const [executarExpanded, setExecutarExpanded] = useState(isExecutarActive);
 
   const myRank = leaderboard.findIndex((e) => e.user_id === user?.id) + 1;
   const xpProgress = user ? getXPForNextLevel(user.xp) : null;
@@ -254,22 +269,69 @@ export function AppLayout({ children }: AppLayoutProps) {
                           <div className="ml-4 mt-0.5 mb-1 pl-3 border-l border-white/10 space-y-0.5">
                             {STEP_SUB_ITEMS.map((sub) => {
                               const subActive = isSubActive(sub.id, projectsSetor);
+                              const hasChildren = !!sub.children;
+                              const isExpanded = hasChildren && executarExpanded;
+
                               return (
-                                <button
-                                  key={sub.id}
-                                  onClick={() => setProjectsSetor(sub.id)}
-                                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-left ${
-                                    subActive
-                                      ? "bg-white/8 text-white"
-                                      : "text-white/35 hover:text-white/70 hover:bg-white/5"
-                                  }`}
-                                >
-                                  <span
-                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: subActive ? sub.color : "#4b5563" }}
-                                  />
-                                  <span className="flex-1">{sub.label}</span>
-                                </button>
+                                <div key={sub.id}>
+                                  <button
+                                    onClick={() => {
+                                      if (hasChildren) {
+                                        setExecutarExpanded((v) => !v);
+                                        // se estiver fechando e um filho está ativo, não muda o setor
+                                        // se estiver abrindo, seleciona o primeiro filho
+                                        if (!executarExpanded) {
+                                          setProjectsSetor("executar-onboarding");
+                                        }
+                                      } else {
+                                        setProjectsSetor(sub.id);
+                                      }
+                                    }}
+                                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-left ${
+                                      subActive
+                                        ? "bg-white/8 text-white"
+                                        : "text-white/35 hover:text-white/70 hover:bg-white/5"
+                                    }`}
+                                  >
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                      style={{ backgroundColor: subActive ? sub.color : "#4b5563" }}
+                                    />
+                                    <span className="flex-1">{sub.label}</span>
+                                    {hasChildren && (
+                                      <ChevronDown
+                                        size={10}
+                                        className={`text-white/30 transition-transform flex-shrink-0 ${isExpanded ? "rotate-0" : "-rotate-90"}`}
+                                      />
+                                    )}
+                                  </button>
+
+                                  {/* Sub-itens de Executar */}
+                                  {hasChildren && isExpanded && (
+                                    <div className="ml-3 pl-2 border-l border-white/8 space-y-0.5 mt-0.5">
+                                      {sub.children!.map((child) => {
+                                        const childActive = projectsSetor === child.id;
+                                        return (
+                                          <button
+                                            key={child.id}
+                                            onClick={() => setProjectsSetor(child.id)}
+                                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-xs transition-all text-left ${
+                                              childActive
+                                                ? "bg-white/8 text-white font-medium"
+                                                : "text-white/30 hover:text-white/60 hover:bg-white/4"
+                                            }`}
+                                          >
+                                            <span
+                                              className="w-1 h-1 rounded-full flex-shrink-0"
+                                              style={{ backgroundColor: childActive ? sub.color : "#374151" }}
+                                            />
+                                            {child.label}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>
