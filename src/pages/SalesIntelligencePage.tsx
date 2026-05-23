@@ -517,7 +517,93 @@ function PosReuniaoForm({
   onGenerate: () => void;
   loading: boolean;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [fileError, setFileError] = useState("");
+
+  const ACCEPTED = ".txt,.pdf,.doc,.docx,.md,.vtt,.srt";
+
+  async function handleTranscriptFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileError("");
+    setUploadingFile(true);
+    try {
+      // Text-based files: read directly
+      const textTypes = ["text/plain", "text/markdown", "text/vtt", "application/octet-stream"];
+      const isText = textTypes.some((t) => file.type.startsWith(t)) ||
+        file.name.endsWith(".txt") || file.name.endsWith(".md") ||
+        file.name.endsWith(".vtt") || file.name.endsWith(".srt");
+
+      if (isText) {
+        const text = await file.text();
+        setTranscricao(text);
+        setUploadedFileName(file.name);
+      } else if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        // PDF: send to Claude to extract text
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const b64 = (reader.result as string).split(",")[1];
+            if (b64) resolve(b64); else reject(new Error("empty"));
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_KEY,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-calls": "true",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-5",
+            max_tokens: 8192,
+            messages: [{
+              role: "user",
+              content: [
+                { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+                { type: "text", text: "Extraia e retorne o texto completo deste documento de transcrição de reunião, mantendo a estrutura de diálogo (interlocutores, falas). Retorne APENAS o texto, sem explicação." },
+              ],
+            }],
+          }),
+        });
+        if (!res.ok) throw new Error(`API error ${res.status}`);
+        const json = await res.json();
+        const text = json.content?.[0]?.text ?? "";
+        setTranscricao(text);
+        setUploadedFileName(file.name);
+      } else if (
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.name.endsWith(".docx") || file.name.endsWith(".doc")
+      ) {
+        // DOCX: read as text (best effort) or show message
+        try {
+          const text = await file.text();
+          setTranscricao(text);
+          setUploadedFileName(file.name);
+        } catch {
+          setFileError("Para arquivos .docx, copie e cole o texto da transcrição abaixo.");
+        }
+      } else {
+        const text = await file.text();
+        setTranscricao(text);
+        setUploadedFileName(file.name);
+      }
+    } catch (err) {
+      console.error("Transcript upload error:", err);
+      setFileError("Erro ao ler o arquivo. Tente .txt ou cole o texto abaixo.");
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   const isReady = empresa.trim() && transcricao.trim().length > 50;
+
   return (
     <div className="space-y-4">
       <div>
@@ -531,22 +617,55 @@ function PosReuniaoForm({
           onChange={(e) => setEmpresa(e.target.value)}
         />
       </div>
+
+      {/* Upload transcrição */}
       <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
-          <MessageSquare size={12} /> Transcrição / Resumo da Reunião *
-        </label>
+        <input ref={fileInputRef} type="file" accept={ACCEPTED} className="hidden" onChange={handleTranscriptFile} />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadingFile || loading}
+          className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 text-primary rounded-xl px-4 py-3 text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {uploadingFile ? (
+            <><Loader2 size={16} className="animate-spin" /> Lendo transcrição...</>
+          ) : (
+            <><Upload size={16} /> Upload da Transcrição</>
+          )}
+        </button>
+        {uploadedFileName && !fileError && (
+          <p className="text-xs text-green-500 mt-1 text-center flex items-center justify-center gap-1">
+            <CheckCircle2 size={11} /> {uploadedFileName} carregado — {transcricao.length} caracteres
+          </p>
+        )}
+        {fileError && <p className="text-xs text-red-500 mt-1 text-center">{fileError}</p>}
+        {!uploadedFileName && !fileError && (
+          <p className="text-xs text-muted-foreground text-center mt-1">
+            Aceita .txt, .pdf, .vtt, .srt, .docx — ou cole o texto abaixo
+          </p>
+        )}
+      </div>
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+        <div className="relative flex justify-center">
+          <span className="bg-card px-3 text-xs text-muted-foreground">ou cole a transcrição</span>
+        </div>
+      </div>
+
+      <div>
         <textarea
           className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-          rows={12}
-          placeholder="Cole aqui a transcrição da call, o resumo da reunião, ou os pontos principais discutidos. Quanto mais detalhado, mais preciso será o resultado..."
+          rows={10}
+          placeholder="Cole aqui a transcrição da call, o resumo da reunião, ou os pontos principais discutidos..."
           value={transcricao}
           onChange={(e) => setTranscricao(e.target.value)}
         />
         <p className="text-xs text-muted-foreground mt-1">{transcricao.length} caracteres — mínimo 50</p>
       </div>
+
       <button
         onClick={onGenerate}
-        disabled={!isReady || loading}
+        disabled={!isReady || loading || uploadingFile}
         className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold transition-colors"
       >
         {loading ? (
