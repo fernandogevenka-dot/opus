@@ -193,15 +193,19 @@ Retorne APENAS o JSON, sem markdown, sem explicação.`,
     }),
   });
 
-  if (!res.ok) throw new Error(`PDF extraction error ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error("PDF extraction API error", res.status, errBody);
+    throw new Error(`PDF extraction error ${res.status}: ${errBody}`);
+  }
   const json = await res.json();
   const text = json.content?.[0]?.text ?? "{}";
   try {
     return JSON.parse(text) as Partial<PreBriefingForm>;
   } catch {
-    // try to find JSON in text
     const match = text.match(/\{[\s\S]*\}/);
     if (match) return JSON.parse(match[0]) as Partial<PreBriefingForm>;
+    console.warn("Could not parse JSON from response:", text);
     return {};
   }
 }
@@ -335,14 +339,23 @@ function FPSUploadButton({
     setError("");
     setLoading(true);
     try {
-      const arrayBuf = await file.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuf);
-      let binary = "";
-      for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
-      const base64 = btoa(binary);
+      // Use FileReader to get clean base64 without btoa charset issues
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // result is "data:application/pdf;base64,<data>"
+          const b64 = result.split(",")[1];
+          if (b64) resolve(b64);
+          else reject(new Error("Empty base64"));
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
       const data = await extractFPSFromPDF(base64);
       onExtracted(data);
     } catch (err) {
+      console.error("FPS import error:", err);
       setError("Erro ao ler o PDF. Tente novamente.");
     } finally {
       setLoading(false);
