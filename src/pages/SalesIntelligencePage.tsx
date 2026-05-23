@@ -145,15 +145,32 @@ async function streamSSE(body: ReadableStream<Uint8Array>, onChunk: (t: string) 
 
 // ─── PDF extractor via Claude Vision ─────────────────────────────────────────
 
+const FPS_EXTRACT_PROMPT = `Extraia as informações deste FPS SQL (Formulário de Pré-Qualificação de Vendas) e retorne SOMENTE um JSON válido com estes campos (use string vazia "" se não encontrar):
+{"empresa":"nome da empresa prospect","segmento":"segmento/setor da empresa","porte":"porte ou tamanho da empresa","website":"site ou instagram ou linkedin mencionado","decisores":"nomes dos decisores mapeados","situacao":"conteúdo do campo S - Situação (SPICED)","problema":"conteúdo do campo P - Problema (SPICED)","impacto":"conteúdo do campo I - Impacto (SPICED)","critical_event":"conteúdo do campo C - Critical Event ou Evento Crítico (SPICED)","decisao":"conteúdo do campo D/E - Decisão (SPICED)","marketing_atual":"diagnóstico de marketing atual mencionado","vendas_atual":"diagnóstico de vendas atual mencionado","budget_estimado":"budget ou investimento mencionado","origem_lead":"como chegou o lead ou origem da prospecção","observacoes_closer":"observações para o closer mencionadas"}
+Retorne APENAS o JSON, sem markdown, sem explicação.`;
+
 async function extractFPSFromPDF(base64: string): Promise<Partial<PreBriefingForm>> {
-  // Usa Edge Function do Supabase — chave fica no servidor, não no browser
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/sales-pdf-extract`, {
+  // Usa ai-chat (Edge Function já deployada) — chave fica no servidor
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({ base64, mediaType: "application/pdf" }),
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 2048,
+      stream: false,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            { type: "text", text: FPS_EXTRACT_PROMPT },
+          ],
+        },
+      ],
+    }),
   });
 
   if (!res.ok) {
@@ -161,9 +178,16 @@ async function extractFPSFromPDF(base64: string): Promise<Partial<PreBriefingFor
     console.error("PDF extraction error", res.status, errBody);
     throw new Error(`PDF extraction error ${res.status}: ${errBody}`);
   }
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data as Partial<PreBriefingForm>;
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  const text: string = json.content?.[0]?.text ?? "{}";
+  try {
+    return JSON.parse(text) as Partial<PreBriefingForm>;
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]) as Partial<PreBriefingForm>;
+    return {};
+  }
 }
 
 // ─── System prompts ───────────────────────────────────────────────────────────
@@ -507,18 +531,30 @@ function PosReuniaoForm({
           reader.onerror = () => reject(reader.error);
           reader.readAsDataURL(file);
         });
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/sales-pdf-extract-text`, {
+        // Usa ai-chat (já deployada) para extrair texto do PDF
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           },
-          body: JSON.stringify({ base64, mediaType: "application/pdf" }),
+          body: JSON.stringify({
+            model: "claude-sonnet-4-5",
+            max_tokens: 8192,
+            stream: false,
+            messages: [{
+              role: "user",
+              content: [
+                { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+                { type: "text", text: "Extraia e retorne o texto completo deste documento de transcrição de reunião, mantendo a estrutura de diálogo (interlocutores e falas). Retorne APENAS o texto, sem explicação." },
+              ],
+            }],
+          }),
         });
-        if (!res.ok) throw new Error(`Edge function error ${res.status}`);
+        if (!res.ok) throw new Error(`ai-chat error ${res.status}: ${await res.text().catch(() => "")}`);
         const json = await res.json();
         if (json.error) throw new Error(json.error);
-        const text = json.text ?? "";
+        const text: string = json.content?.[0]?.text ?? "";
         setTranscricao(text);
         setUploadedFileName(file.name);
       } else if (
