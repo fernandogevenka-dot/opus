@@ -146,68 +146,24 @@ async function streamSSE(body: ReadableStream<Uint8Array>, onChunk: (t: string) 
 // ─── PDF extractor via Claude Vision ─────────────────────────────────────────
 
 async function extractFPSFromPDF(base64: string): Promise<Partial<PreBriefingForm>> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  // Usa Edge Function do Supabase — chave fica no servidor, não no browser
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/sales-pdf-extract`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-calls": "true",
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({
-      model: "claude-opus-4-7",
-      max_tokens: 2048,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: { type: "base64", media_type: "application/pdf", data: base64 },
-            },
-            {
-              type: "text",
-              text: `Extraia as informações deste FPS SQL (Formulário de Pré-Qualificação de Vendas) e retorne SOMENTE um JSON válido com estes campos (use string vazia "" se não encontrar):
-{
-  "empresa": "nome da empresa prospect",
-  "segmento": "segmento/setor da empresa",
-  "porte": "porte ou tamanho da empresa",
-  "website": "site ou instagram ou linkedin mencionado",
-  "decisores": "nomes dos decisores mapeados",
-  "situacao": "conteúdo do campo S - Situação (SPICED)",
-  "problema": "conteúdo do campo P - Problema (SPICED)",
-  "impacto": "conteúdo do campo I - Impacto (SPICED)",
-  "critical_event": "conteúdo do campo C - Critical Event ou Evento Crítico (SPICED)",
-  "decisao": "conteúdo do campo D - Decisão (SPICED)",
-  "marketing_atual": "diagnóstico de marketing atual mencionado",
-  "vendas_atual": "diagnóstico de vendas atual mencionado",
-  "budget_estimado": "budget ou investimento mencionado",
-  "origem_lead": "como chegou o lead ou origem da prospecção",
-  "observacoes_closer": "observações para o closer mencionadas"
-}
-Retorne APENAS o JSON, sem markdown, sem explicação.`,
-            },
-          ],
-        },
-      ],
-    }),
+    body: JSON.stringify({ base64, mediaType: "application/pdf" }),
   });
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
-    console.error("PDF extraction API error", res.status, errBody);
+    console.error("PDF extraction error", res.status, errBody);
     throw new Error(`PDF extraction error ${res.status}: ${errBody}`);
   }
-  const json = await res.json();
-  const text = json.content?.[0]?.text ?? "{}";
-  try {
-    return JSON.parse(text) as Partial<PreBriefingForm>;
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]) as Partial<PreBriefingForm>;
-    console.warn("Could not parse JSON from response:", text);
-    return {};
-  }
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data as Partial<PreBriefingForm>;
 }
 
 // ─── System prompts ───────────────────────────────────────────────────────────
@@ -541,7 +497,7 @@ function PosReuniaoForm({
         setTranscricao(text);
         setUploadedFileName(file.name);
       } else if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-        // PDF: send to Claude to extract text
+        // PDF: extrai via Edge Function do Supabase (chave no servidor)
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => {
@@ -551,29 +507,18 @@ function PosReuniaoForm({
           reader.onerror = () => reject(reader.error);
           reader.readAsDataURL(file);
         });
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/sales-pdf-extract-text`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_KEY,
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerous-direct-browser-calls": "true",
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-5",
-            max_tokens: 8192,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-                { type: "text", text: "Extraia e retorne o texto completo deste documento de transcrição de reunião, mantendo a estrutura de diálogo (interlocutores, falas). Retorne APENAS o texto, sem explicação." },
-              ],
-            }],
-          }),
+          body: JSON.stringify({ base64, mediaType: "application/pdf" }),
         });
-        if (!res.ok) throw new Error(`API error ${res.status}`);
+        if (!res.ok) throw new Error(`Edge function error ${res.status}`);
         const json = await res.json();
-        const text = json.content?.[0]?.text ?? "";
+        if (json.error) throw new Error(json.error);
+        const text = json.text ?? "";
         setTranscricao(text);
         setUploadedFileName(file.name);
       } else if (
