@@ -2,28 +2,36 @@ import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import {
-  ClipboardList, Mic2, Send, Loader2, ChevronDown, ChevronUp,
+  ClipboardList, Mic2, Loader2, ChevronDown, ChevronUp,
   User, Building2, DollarSign, Target, FileText, Sparkles,
   AlertCircle, CheckCircle2, RefreshCw, Clock, TrendingUp,
-  Briefcase, Globe, BookOpen, MessageSquare, Plus, Trash2,
-  Copy, Download,
+  Briefcase, Globe, BookOpen, MessageSquare, Trash2,
+  Copy, Upload, Zap, Calendar,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = "pre" | "pos";
 
+// Campos espelham a metodologia SPICED do FPS SQL
 interface PreBriefingForm {
   empresa: string;
   segmento: string;
   porte: string;
   website: string;
   decisores: string;
+  // SPICED
+  situacao: string;
   problema: string;
-  historico: string;
+  impacto: string;
+  critical_event: string;
+  decisao: string;
+  // Extras
+  marketing_atual: string;
+  vendas_atual: string;
   budget_estimado: string;
   origem_lead: string;
-  notas_extras: string;
+  observacoes_closer: string;
 }
 
 const EMPTY_PRE_FORM: PreBriefingForm = {
@@ -32,11 +40,16 @@ const EMPTY_PRE_FORM: PreBriefingForm = {
   porte: "",
   website: "",
   decisores: "",
+  situacao: "",
   problema: "",
-  historico: "",
+  impacto: "",
+  critical_event: "",
+  decisao: "",
+  marketing_atual: "",
+  vendas_atual: "",
   budget_estimado: "",
   origem_lead: "",
-  notas_extras: "",
+  observacoes_closer: "",
 };
 
 interface SavedBriefing {
@@ -54,12 +67,46 @@ const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY as string;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-async function callClaude(systemPrompt: string, userMessage: string, onChunk: (t: string) => void) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-proxy`, {
+async function callClaude(
+  systemPrompt: string,
+  userMessage: string,
+  onChunk: (t: string) => void
+) {
+  // Try proxy first, fallback to direct
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-proxy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        max_tokens: 4096,
+        stream: true,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    });
+    if (res.ok && res.body) {
+      return await streamSSE(res.body, onChunk);
+    }
+  } catch { /* fallback */ }
+  return callClaudeDirect(systemPrompt, userMessage, onChunk);
+}
+
+async function callClaudeDirect(
+  systemPrompt: string,
+  userMessage: string,
+  onChunk: (t: string) => void
+) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "x-api-key": ANTHROPIC_KEY,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-calls": "true",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
@@ -69,13 +116,12 @@ async function callClaude(systemPrompt: string, userMessage: string, onChunk: (t
       messages: [{ role: "user", content: userMessage }],
     }),
   });
+  if (!res.ok || !res.body) throw new Error(`API error ${res.status}`);
+  return streamSSE(res.body, onChunk);
+}
 
-  if (!res.ok || !res.body) {
-    // fallback: direct call
-    return callClaudeDirect(systemPrompt, userMessage, onChunk);
-  }
-
-  const reader = res.body.getReader();
+async function streamSSE(body: ReadableStream<Uint8Array>, onChunk: (t: string) => void) {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
   while (true) {
@@ -97,7 +143,9 @@ async function callClaude(systemPrompt: string, userMessage: string, onChunk: (t
   }
 }
 
-async function callClaudeDirect(systemPrompt: string, userMessage: string, onChunk: (t: string) => void) {
+// ─── PDF extractor via Claude Vision ─────────────────────────────────────────
+
+async function extractFPSFromPDF(base64: string): Promise<Partial<PreBriefingForm>> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -107,35 +155,54 @@ async function callClaudeDirect(systemPrompt: string, userMessage: string, onChu
       "anthropic-dangerous-direct-browser-calls": "true",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
-      max_tokens: 4096,
-      stream: true,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
+      model: "claude-opus-4-7",
+      max_tokens: 2048,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: base64 },
+            },
+            {
+              type: "text",
+              text: `Extraia as informações deste FPS SQL (Formulário de Pré-Qualificação de Vendas) e retorne SOMENTE um JSON válido com estes campos (use string vazia "" se não encontrar):
+{
+  "empresa": "nome da empresa prospect",
+  "segmento": "segmento/setor da empresa",
+  "porte": "porte ou tamanho da empresa",
+  "website": "site ou instagram ou linkedin mencionado",
+  "decisores": "nomes dos decisores mapeados",
+  "situacao": "conteúdo do campo S - Situação (SPICED)",
+  "problema": "conteúdo do campo P - Problema (SPICED)",
+  "impacto": "conteúdo do campo I - Impacto (SPICED)",
+  "critical_event": "conteúdo do campo C - Critical Event ou Evento Crítico (SPICED)",
+  "decisao": "conteúdo do campo D - Decisão (SPICED)",
+  "marketing_atual": "diagnóstico de marketing atual mencionado",
+  "vendas_atual": "diagnóstico de vendas atual mencionado",
+  "budget_estimado": "budget ou investimento mencionado",
+  "origem_lead": "como chegou o lead ou origem da prospecção",
+  "observacoes_closer": "observações para o closer mencionadas"
+}
+Retorne APENAS o JSON, sem markdown, sem explicação.`,
+            },
+          ],
+        },
+      ],
     }),
   });
 
-  if (!res.ok || !res.body) throw new Error(`API error ${res.status}`);
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() ?? "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (data === "[DONE]") return;
-      try {
-        const parsed = JSON.parse(data);
-        const text = parsed.delta?.text ?? "";
-        if (text) onChunk(text);
-      } catch { /* skip */ }
-    }
+  if (!res.ok) throw new Error(`PDF extraction error ${res.status}`);
+  const json = await res.json();
+  const text = json.content?.[0]?.text ?? "{}";
+  try {
+    return JSON.parse(text) as Partial<PreBriefingForm>;
+  } catch {
+    // try to find JSON in text
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]) as Partial<PreBriefingForm>;
+    return {};
   }
 }
 
@@ -143,8 +210,15 @@ async function callClaudeDirect(systemPrompt: string, userMessage: string, onChu
 
 const PRE_SYSTEM_PROMPT = `Você é o Sales Intelligence da V4 Oxicore & Co — o assistente estratégico que prepara o Closer para reuniões de vendas.
 
+Os dados foram coletados pelo pré-vendedor usando a metodologia SPICED:
+- S — Situação: contexto geral da empresa
+- P — Problema: dores identificadas
+- I — Impacto: impacto financeiro quantificado do problema
+- C — Critical Event: gatilho de urgência (por que agir agora?)
+- E — Decision (Decisão): quem decide e como
+
 Seu trabalho:
-1. Analisar o perfil do prospect preenchido pelo pré-vendedor
+1. Analisar o perfil SPICED do prospect
 2. Identificar o problema central e os produtos V4 mais adequados
 3. Sugerir o roteiro estratégico da reunião
 4. Antecipar objeções e como superá-las
@@ -154,24 +228,24 @@ Portfólio V4 (categorias):
 - **SABER** — Diagnóstico, auditoria e análise do time comercial. Para empresas que não sabem onde estão travadas.
 - **TER** — Implantação de estrutura comercial, scripts, playbooks, metodologia. Para empresas que precisam construir máquina de vendas.
 - **EXECUTAR** — Gestão comercial contínua, treinamento recorrente, acompanhamento de resultado. Para empresas que precisam de execução.
-- **DESTRAVA RECEITA** — Ações cirúrgicas rápidas (auditoria de fechamento, prospecção, SDR). Para travar resultado imediato.
+- **DESTRAVA RECEITA** — Ações cirúrgicas rápidas (auditoria de fechamento, prospecção, SDR). Para resultado imediato.
 
 Formato de resposta — use markdown rico com:
-## 🎯 Diagnóstico do Prospect
-## 🏢 Perfil da Empresa (inclua pesquisa do setor/mercado)
-## 💡 Produtos Recomendados (top 3, com justificativa)
+## 🎯 Diagnóstico SPICED
+## 🏢 Perfil da Empresa e Mercado
+## 💡 Produtos Recomendados (top 3, com justificativa baseada no SPICED)
 ## 🗺️ Roteiro da Reunião (abertura → descoberta → solução → fechamento)
 ## ⚡ Objeções Prováveis e Como Responder
 ## 🚀 Abordagem Estratégica Recomendada
 ## 📋 Checklist Pré-Call
 
-Seja específico, estratégico e focado em resultado. Não seja genérico.`;
+Seja específico, estratégico e focado em resultado. Use os dados SPICED para personalizar cada seção.`;
 
 const POS_SYSTEM_PROMPT = `Você é o Sales Intelligence da V4 Oxicore & Co — o assistente que transforma transcrições de calls em material de vendas estruturado.
 
 Seu trabalho:
 1. Analisar a transcrição/resumo da reunião
-2. Identificar o problema central do cliente
+2. Identificar o problema central do cliente (lente SPICED)
 3. Recomendar os produtos V4 mais adequados ao que foi discutido
 4. Redigir a proposta comercial estruturada
 5. Definir próximos passos e follow-up
@@ -184,16 +258,16 @@ Portfólio V4 (categorias):
 
 Formato de resposta — use markdown rico com:
 ## 📋 Resumo da Reunião
-## 🎯 Problema Central Identificado
+## 🎯 Problema Central (análise SPICED)
 ## 💡 Solução Recomendada (produtos V4 + justificativa)
 ## 📄 Rascunho da Proposta Comercial
-## 🤝 Argumentos de Valor (por que V4 resolve esse problema)
+## 🤝 Argumentos de Valor (ROI esperado para o cliente)
 ## 📅 Próximos Passos e Follow-up
 ## ⚠️ Pontos de Atenção / Riscos
 
 Seja direto, comercialmente assertivo e focado no ROI para o cliente.`;
 
-// ─── Markdown renderer simples ────────────────────────────────────────────────
+// ─── Markdown renderer ────────────────────────────────────────────────────────
 
 function renderMarkdown(text: string) {
   const lines = text.split("\n");
@@ -203,7 +277,7 @@ function renderMarkdown(text: string) {
   for (const line of lines) {
     if (line.startsWith("## ")) {
       elements.push(
-        <h2 key={key++} className="text-base font-bold text-foreground mt-5 mb-2 flex items-center gap-2">
+        <h2 key={key++} className="text-base font-bold text-foreground mt-5 mb-2">
           {line.slice(3)}
         </h2>
       );
@@ -212,12 +286,6 @@ function renderMarkdown(text: string) {
         <h3 key={key++} className="text-sm font-semibold text-foreground mt-3 mb-1">
           {line.slice(4)}
         </h3>
-      );
-    } else if (line.startsWith("**") && line.endsWith("**") && line.length > 4) {
-      elements.push(
-        <p key={key++} className="text-sm font-semibold text-foreground my-1">
-          {line.slice(2, -2)}
-        </p>
       );
     } else if (line.startsWith("- ") || line.startsWith("• ")) {
       const content = line.slice(2);
@@ -245,27 +313,96 @@ function renderMarkdown(text: string) {
   return <div className="space-y-0">{elements}</div>;
 }
 
-// ─── Pre-Briefing Form ────────────────────────────────────────────────────────
+// ─── FPS Upload Button ────────────────────────────────────────────────────────
+
+function FPSUploadButton({
+  onExtracted, loading, setLoading,
+}: {
+  onExtracted: (data: Partial<PreBriefingForm>) => void;
+  loading: boolean;
+  setLoading: (v: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState("");
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setError("Selecione um arquivo PDF.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuf);
+      let binary = "";
+      for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+      const base64 = btoa(binary);
+      const data = await extractFPSFromPDF(base64);
+      onExtracted(data);
+    } catch (err) {
+      setError("Erro ao ler o PDF. Tente novamente.");
+    } finally {
+      setLoading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div>
+      <input ref={inputRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 text-primary rounded-xl px-4 py-3 text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loading ? (
+          <><Loader2 size={16} className="animate-spin" /> Lendo FPS SQL...</>
+        ) : (
+          <><Upload size={16} /> Importar FPS SQL (PDF)</>
+        )}
+      </button>
+      {error && <p className="text-xs text-red-500 mt-1 text-center">{error}</p>}
+      {!error && (
+        <p className="text-xs text-muted-foreground text-center mt-1">
+          Importe o FPS SQL do pré-vendedor para preencher automaticamente com IA
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Pre-Briefing Form (SPICED) ───────────────────────────────────────────────
 
 function PreBriefingForm({
-  form, setForm, onGenerate, loading,
+  form, setForm, onGenerate, loading, extracting, setExtracting,
 }: {
   form: PreBriefingForm;
   setForm: (f: PreBriefingForm) => void;
   onGenerate: () => void;
   loading: boolean;
+  extracting: boolean;
+  setExtracting: (v: boolean) => void;
 }) {
   const field = (
     label: string,
     key: keyof PreBriefingForm,
     placeholder: string,
     textarea = false,
-    icon?: React.ReactNode
+    icon?: React.ReactNode,
+    badge?: string
   ) => (
     <div>
       <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
         {icon}
         {label}
+        {badge && (
+          <span className="ml-auto text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+            {badge}
+          </span>
+        )}
       </label>
       {textarea ? (
         <textarea
@@ -289,34 +426,64 @@ function PreBriefingForm({
   const isReady = form.empresa.trim() && form.problema.trim();
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {field("Nome da Empresa *", "empresa", "Ex: Acme Ltda", false, <Building2 size={12} />)}
-        {field("Segmento / Setor", "segmento", "Ex: SaaS B2B, Varejo, Indústria", false, <Briefcase size={12} />)}
-        {field("Porte", "porte", "Ex: Startup 10 funcionários, PME R$5M/ano", false, <TrendingUp size={12} />)}
-        {field("Website / LinkedIn", "website", "https://...", false, <Globe size={12} />)}
-        {field("Decisores na Reunião", "decisores", "Ex: CEO João, Gerente Comercial Ana", false, <User size={12} />)}
-        {field("Budget Estimado", "budget_estimado", "Ex: R$ 30k–50k", false, <DollarSign size={12} />)}
-        {field("Origem do Lead", "origem_lead", "Ex: Indicação, LinkedIn, Cold Outbound", false, <Target size={12} />)}
+    <div className="space-y-5">
+      {/* Upload FPS */}
+      <FPSUploadButton
+        onExtracted={(data) => setForm({ ...form, ...data })}
+        loading={extracting}
+        setLoading={setExtracting}
+      />
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+        <div className="relative flex justify-center">
+          <span className="bg-card px-3 text-xs text-muted-foreground">ou preencha manualmente</span>
+        </div>
       </div>
-      {field("Problema Relatado pelo Lead *", "problema", "Descreva o que o pré-vendedor levantou como principal dor ou necessidade do cliente...", true, <AlertCircle size={12} />)}
-      {field("Histórico de Contato", "historico", "Já foi cliente? Tentativas anteriores? Contexto relevante...", true, <Clock size={12} />)}
-      {field("Notas Extras", "notas_extras", "Qualquer outra informação relevante para o Closer...", true, <FileText size={12} />)}
+
+      {/* Dados básicos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {field("Nome da Empresa *", "empresa", "Ex: Marques Plastic", false, <Building2 size={12} />)}
+        {field("Segmento / Setor", "segmento", "Ex: Indústria plástica, SaaS B2B", false, <Briefcase size={12} />)}
+        {field("Porte", "porte", "Ex: PME, R$800k/mês faturamento", false, <TrendingUp size={12} />)}
+        {field("Website / Instagram / LinkedIn", "website", "https://...", false, <Globe size={12} />)}
+        {field("Decisores na Reunião", "decisores", "Ex: Wellington (CEO), Paulo (sócio)", false, <User size={12} />)}
+        {field("Budget Estimado", "budget_estimado", "Ex: R$20k–40k/mês", false, <DollarSign size={12} />)}
+        {field("Origem do Lead", "origem_lead", "Ex: Cold outbound, indicação, LinkedIn", false, <Target size={12} />)}
+      </div>
+
+      {/* SPICED */}
+      <div className="space-y-3">
+        <p className="text-xs font-bold text-primary uppercase tracking-widest">Metodologia SPICED</p>
+        {field("S — Situação", "situacao", "Contexto geral: tempo de mercado, sócios, equipe, modelo de vendas atual, como chegou até a V4...", true, <FileText size={12} />, "S")}
+        {field("P — Problema", "problema", "Dores identificadas: o que está travando o crescimento? Qual a principal frustração? *", true, <AlertCircle size={12} />, "P")}
+        {field("I — Impacto", "impacto", "Impacto financeiro: gap entre faturamento atual e capacidade máxima, quanto o problema custa por mês...", true, <TrendingUp size={12} />, "I")}
+        {field("C — Critical Event", "critical_event", "Gatilho de urgência: por que agir agora? Nova máquina chegando? Sazonalidade? Concorrente entrando?", true, <Zap size={12} />, "C")}
+        {field("E — Decision (Decisão)", "decisao", "Quem decide, como decide, quando: reunião agendada, próximos passos acordados...", true, <Calendar size={12} />, "E")}
+      </div>
+
+      {/* Diagnóstico comercial */}
+      <div className="space-y-3">
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Diagnóstico Comercial</p>
+        {field("Marketing Atual", "marketing_atual", "Redes sociais, site, Google, canais de captação existentes...", true, <Globe size={12} />)}
+        {field("Vendas Atual", "vendas_atual", "Número de vendedores, processo, CRM, origem dos leads...", true, <Briefcase size={12} />)}
+        {field("Observações para o Closer", "observacoes_closer", "Alertas, pontos de atenção, pendências críticas para a reunião...", true, <MessageSquare size={12} />)}
+      </div>
 
       <button
         onClick={onGenerate}
-        disabled={!isReady || loading}
+        disabled={!isReady || loading || extracting}
         className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold transition-colors"
       >
         {loading ? (
-          <><Loader2 size={16} className="animate-spin" /> Gerando briefing...</>
+          <><Loader2 size={16} className="animate-spin" /> Gerando briefing SPICED...</>
         ) : (
-          <><Sparkles size={16} /> Gerar Briefing com IA</>
+          <><Sparkles size={16} /> Preparar Closer com IA</>
         )}
       </button>
       {!isReady && (
         <p className="text-xs text-muted-foreground text-center">
-          Preencha pelo menos <strong>Nome da Empresa</strong> e <strong>Problema Relatado</strong> para continuar
+          Preencha pelo menos <strong>Empresa</strong> e <strong>Problema (P)</strong> para continuar
         </p>
       )}
     </div>
@@ -325,7 +492,7 @@ function PreBriefingForm({
 
 // ─── Pos-Reuniao Form ─────────────────────────────────────────────────────────
 
-function PosReuniaForm({
+function PosReuniaoForm({
   empresa, setEmpresa,
   transcricao, setTranscricao,
   onGenerate, loading,
@@ -346,7 +513,7 @@ function PosReuniaForm({
         </label>
         <input
           className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder="Ex: Acme Ltda"
+          placeholder="Ex: Marques Plastic"
           value={empresa}
           onChange={(e) => setEmpresa(e.target.value)}
         />
@@ -397,27 +564,23 @@ function ResultPanel({
     if (streaming) endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [result, streaming]);
 
-  function copyToClipboard() {
-    navigator.clipboard.writeText(result);
-  }
-
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
-        <div className="flex items-center gap-2">
-          <Sparkles size={14} className="text-primary" />
-          <span className="text-sm font-semibold text-foreground">
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles size={14} className="text-primary flex-shrink-0" />
+          <span className="text-sm font-semibold text-foreground truncate">
             {tab === "pre" ? "Briefing Pré-Reunião" : "Análise Pós-Reunião"} — {empresa}
           </span>
           {streaming && (
-            <span className="text-xs text-primary animate-pulse flex items-center gap-1">
+            <span className="text-xs text-primary animate-pulse flex items-center gap-1 flex-shrink-0">
               <Loader2 size={10} className="animate-spin" /> Gerando...
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
-            onClick={copyToClipboard}
+            onClick={() => navigator.clipboard.writeText(result)}
             className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
             title="Copiar"
           >
@@ -430,7 +593,7 @@ function ResultPanel({
               className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 px-3 py-1.5 rounded-lg font-medium transition-colors"
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : <BookOpen size={12} />}
-              Salvar no histórico
+              Salvar
             </button>
           )}
           {saved && (
@@ -459,9 +622,7 @@ function HistoryPanel({
   activeId: string | null;
 }) {
   if (items.length === 0) return (
-    <div className="text-center py-8 text-muted-foreground text-sm">
-      Nenhum briefing salvo ainda.
-    </div>
+    <div className="text-center py-8 text-muted-foreground text-sm">Nenhum briefing salvo ainda.</div>
   );
   return (
     <div className="space-y-2">
@@ -496,24 +657,20 @@ export function SalesIntelligencePage() {
   const [tab, setTab] = useState<Tab>("pre");
   const [showHistory, setShowHistory] = useState(false);
 
-  // Pre-briefing state
   const [preForm, setPreForm] = useState<PreBriefingForm>(EMPTY_PRE_FORM);
+  const [extracting, setExtracting] = useState(false);
 
-  // Pos-reuniao state
   const [posEmpresa, setPosEmpresa] = useState("");
   const [posTranscricao, setPosTranscricao] = useState("");
 
-  // Result state
   const [result, setResult] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [resultTab, setResultTab] = useState<Tab>("pre");
   const [resultEmpresa, setResultEmpresa] = useState("");
 
-  // Save state
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // History
   const [history, setHistory] = useState<SavedBriefing[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
@@ -540,35 +697,48 @@ export function SalesIntelligencePage() {
     setResultTab("pre");
     setResultEmpresa(preForm.empresa);
 
-    const userMessage = `
-## Dados do Prospect
+    const msg = `
+## Dados SPICED do Prospect
 
 **Empresa:** ${preForm.empresa}
 **Segmento:** ${preForm.segmento || "Não informado"}
 **Porte:** ${preForm.porte || "Não informado"}
-**Website:** ${preForm.website || "Não informado"}
-**Decisores na Reunião:** ${preForm.decisores || "Não informado"}
+**Website/Redes:** ${preForm.website || "Não informado"}
+**Decisores:** ${preForm.decisores || "Não informado"}
 **Budget Estimado:** ${preForm.budget_estimado || "Não informado"}
 **Origem do Lead:** ${preForm.origem_lead || "Não informado"}
 
-**Problema Relatado pelo Pré-Vendedor:**
+**S — Situação:**
+${preForm.situacao || "Não preenchido"}
+
+**P — Problema:**
 ${preForm.problema}
 
-**Histórico de Contato:**
-${preForm.historico || "Sem histórico registrado"}
+**I — Impacto:**
+${preForm.impacto || "Não preenchido"}
 
-**Notas Extras:**
-${preForm.notas_extras || "Nenhuma"}
+**C — Critical Event:**
+${preForm.critical_event || "Não preenchido"}
+
+**E — Decision (Decisão):**
+${preForm.decisao || "Não preenchido"}
+
+**Marketing Atual:**
+${preForm.marketing_atual || "Não informado"}
+
+**Vendas Atual:**
+${preForm.vendas_atual || "Não informado"}
+
+**Observações para o Closer:**
+${preForm.observacoes_closer || "Nenhuma"}
 
 ---
-Prepare o Closer para essa reunião.
+Prepare o Closer para essa reunião com base no SPICED acima.
     `.trim();
 
     try {
-      await callClaude(PRE_SYSTEM_PROMPT, userMessage, (chunk) => {
-        setResult((prev) => prev + chunk);
-      });
-    } catch (err) {
+      await callClaude(PRE_SYSTEM_PROMPT, msg, (chunk) => setResult((p) => p + chunk));
+    } catch {
       setResult("Erro ao gerar briefing. Verifique a conexão e tente novamente.");
     } finally {
       setStreaming(false);
@@ -582,21 +752,11 @@ Prepare o Closer para essa reunião.
     setResultTab("pos");
     setResultEmpresa(posEmpresa);
 
-    const userMessage = `
-## Empresa: ${posEmpresa}
-
-## Transcrição / Resumo da Reunião:
-${posTranscricao}
-
----
-Analise essa reunião e prepare o material pós-call.
-    `.trim();
+    const msg = `## Empresa: ${posEmpresa}\n\n## Transcrição / Resumo da Reunião:\n${posTranscricao}\n\n---\nAnalise essa reunião e prepare o material pós-call.`.trim();
 
     try {
-      await callClaude(POS_SYSTEM_PROMPT, userMessage, (chunk) => {
-        setResult((prev) => prev + chunk);
-      });
-    } catch (err) {
+      await callClaude(POS_SYSTEM_PROMPT, msg, (chunk) => setResult((p) => p + chunk));
+    } catch {
       setResult("Erro ao analisar reunião. Verifique a conexão e tente novamente.");
     } finally {
       setStreaming(false);
@@ -630,10 +790,7 @@ Analise essa reunião e prepare o material pós-call.
   async function deleteHistory(id: string) {
     await supabase.from("sales_briefings").delete().eq("id", id);
     setHistory((prev) => prev.filter((b) => b.id !== id));
-    if (activeHistoryId === id) {
-      setActiveHistoryId(null);
-      setResult("");
-    }
+    if (activeHistoryId === id) { setActiveHistoryId(null); setResult(""); }
   }
 
   return (
@@ -647,7 +804,7 @@ Analise essa reunião e prepare o material pós-call.
               Sales Intelligence
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Prepare closers, formalize propostas e acelere o pipeline
+              Metodologia SPICED · Prepare closers · Formalize propostas
             </p>
           </div>
           <button
@@ -684,33 +841,25 @@ Analise essa reunião e prepare o material pós-call.
         <div className={`grid gap-6 p-6 ${result ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1 max-w-2xl mx-auto"}`}>
           {/* Left: Form */}
           <div className="space-y-6">
-            {/* History panel (inline) */}
             {showHistory && (
               <div className="bg-card border border-border rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <BookOpen size={14} className="text-primary" />
-                    Histórico de Briefings
+                    <BookOpen size={14} className="text-primary" /> Histórico de Briefings
                   </h3>
                   {loadingHistory && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
                 </div>
-                <HistoryPanel
-                  items={history}
-                  onSelect={selectHistory}
-                  onDelete={deleteHistory}
-                  activeId={activeHistoryId}
-                />
+                <HistoryPanel items={history} onSelect={selectHistory} onDelete={deleteHistory} activeId={activeHistoryId} />
               </div>
             )}
 
-            {/* Form card */}
             <div className="bg-card border border-border rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   {tab === "pre" ? (
-                    <><ClipboardList size={15} className="text-primary" /> Preencher Briefing do Prospect</>
+                    <><ClipboardList size={15} className="text-primary" /> Briefing SPICED do Prospect</>
                   ) : (
-                    <><Mic2 size={15} className="text-primary" /> Inserir Transcrição da Reunião</>
+                    <><Mic2 size={15} className="text-primary" /> Transcrição da Reunião</>
                   )}
                 </h2>
                 {tab === "pre" && (
@@ -729,9 +878,11 @@ Analise essa reunião e prepare o material pós-call.
                   setForm={setPreForm}
                   onGenerate={generatePre}
                   loading={streaming && resultTab === "pre"}
+                  extracting={extracting}
+                  setExtracting={setExtracting}
                 />
               ) : (
-                <PosReuniaForm
+                <PosReuniaoForm
                   empresa={posEmpresa}
                   setEmpresa={setPosEmpresa}
                   transcricao={posTranscricao}
