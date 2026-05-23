@@ -231,7 +231,7 @@ export function UserApprovalPage() {
         <div>
           <h1 className="text-xl font-bold">Aprovação de Usuários</h1>
           <p className="text-sm text-muted-foreground">
-            Vincule cadastros, defina permissões e libere acesso ao Opus
+            Vincule cadastros, defina permissões e libere acesso ao Oxicore
           </p>
         </div>
         <button

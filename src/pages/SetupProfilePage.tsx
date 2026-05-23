@@ -50,7 +50,7 @@ const FUNCOES = [
   "Desenvolvedor",
 ];
 
-// Itens de destaque do Opus — exibidos no lado esquerdo / topo
+// Itens de destaque do Oxicore — exibidos no lado esquerdo / topo
 const HIGHLIGHTS = [
   { icon: <Rocket className="w-4 h-4" />, text: "Acompanhe projetos e resultados em tempo real" },
   { icon: <Users2 className="w-4 h-4" />, text: "Conecte-se com o seu time no escritório virtual" },
@@ -105,10 +105,10 @@ export function SetupProfilePage() {
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 ring-1 ring-white/10">
-            <img src="/v4-logo.jpg" alt="Opus" className="w-full h-full object-cover" />
+            <img src="/v4-logo.jpg" alt="Oxicore" className="w-full h-full object-cover" />
           </div>
           <div>
-            <h1 className="text-lg font-bold">Bem-vindo ao Opus</h1>
+            <h1 className="text-lg font-bold">Bem-vindo ao Oxicore</h1>
             <p className="text-xs text-muted-foreground">
               Olá, {user?.name?.split(" ")[0]}! Você foi aprovado.
             </p>
@@ -166,7 +166,7 @@ export function SetupProfilePage() {
             >
               <h2 className="text-sm font-semibold mb-1">Qual é o seu cargo?</h2>
               <p className="text-xs text-muted-foreground mb-4">
-                Essa informação ajuda a personalizar sua experiência no Opus. O nível de acesso será definido pela liderança.
+                Essa informação ajuda a personalizar sua experiência no Oxicore. O nível de acesso será definido pela liderança.
               </p>
               <div className="space-y-2">
                 {CARGO_OPTIONS.map((opt) => (
@@ -246,7 +246,7 @@ export function SetupProfilePage() {
                   ) : (
                     <>
                       <Rocket className="w-4 h-4" />
-                      Acessar o Opus
+                      Acessar o Oxicore
                     </>
                   )}
                 </button>

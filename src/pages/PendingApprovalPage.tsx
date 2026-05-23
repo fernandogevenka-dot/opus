@@ -29,7 +29,7 @@ export function PendingApprovalPage() {
           transition={{ delay: 0.1, type: "spring", damping: 15 }}
           className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-6 shadow-lg"
         >
-          <img src="/v4-logo.jpg" alt="Opus" className="w-full h-full object-cover" />
+          <img src="/v4-logo.jpg" alt="Oxicore" className="w-full h-full object-cover" />
         </motion.div>
 
         <div className="w-14 h-14 rounded-full bg-amber-500/15 flex items-center justify-center mx-auto mb-4">

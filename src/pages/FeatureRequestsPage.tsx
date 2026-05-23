@@ -398,7 +398,7 @@ function DetailPanel({
           {!isAdmin && item.admin_notes && (
             <div className="px-5 py-3 border-b border-border/20">
               <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2.5">
-                <p className="text-[10px] font-semibold text-primary mb-1">Nota do time Opus</p>
+                <p className="text-[10px] font-semibold text-primary mb-1">Nota do time Oxicore</p>
                 <p className="text-xs text-muted-foreground">{item.admin_notes}</p>
               </div>
             </div>
@@ -512,7 +512,7 @@ export function FeatureRequestsPage() {
       <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-border/30">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-lg font-bold">Melhorias do Opus</h1>
+            <h1 className="text-lg font-bold">Melhorias do Oxicore</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
               Vote nas ideias que você quer ver implementadas ou sugira novas
             </p>

@@ -24,15 +24,16 @@ import { UserApprovalPage } from "@/pages/UserApprovalPage";
 import { FeatureRequestsPage } from "@/pages/FeatureRequestsPage";
 import { GTMCockpitPage } from "@/pages/GTMCockpitPage";
 import { MBRPage } from "@/pages/MBRPage";
+import { SalesIntelligencePage } from "@/pages/SalesIntelligencePage";
 
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center space-y-4">
         <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto animate-pulse">
-          <img src="/v4-logo.jpg" alt="OPUS" className="w-full h-full object-cover" />
+          <img src="/v4-logo.jpg" alt="Oxicore" className="w-full h-full object-cover" />
         </div>
-        <p className="text-muted-foreground text-sm">Carregando OPUS...</p>
+        <p className="text-muted-foreground text-sm">Carregando Oxicore...</p>
         <p className="text-muted-foreground/50 text-xs">Verifique o console (F12) se demorar muito</p>
       </div>
     </div>
@@ -63,6 +64,7 @@ function PageRouter() {
     case "feature-requests": return <FeatureRequestsPage />;
     case "gtm-cockpit":      return <GTMCockpitPage />;
     case "mbr":              return <MBRPage />;
+    case "sales":            return <SalesIntelligencePage />;
     default:                 return <OfficePage />;
   }
 }

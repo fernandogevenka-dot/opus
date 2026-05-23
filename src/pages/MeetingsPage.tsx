@@ -175,7 +175,7 @@ export function MeetingsPage() {
             <div className="text-center">
               <p className="font-semibold text-foreground text-lg">Salas de Reunião</p>
               <p className="text-sm mt-1">Selecione uma sala à esquerda para entrar</p>
-              <p className="text-xs mt-1 opacity-60">Google Meet integrado — áudio e vídeo direto no OPUS</p>
+              <p className="text-xs mt-1 opacity-60">Google Meet integrado — áudio e vídeo direto no Oxicore</p>
             </div>
           </div>
         )}
