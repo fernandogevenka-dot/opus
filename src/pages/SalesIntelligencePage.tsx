@@ -72,27 +72,26 @@ async function callClaude(
   userMessage: string,
   onChunk: (t: string) => void
 ) {
-  // Try proxy first, fallback to direct
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-proxy`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-5",
-        max_tokens: 4096,
-        stream: true,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userMessage }],
-      }),
-    });
-    if (res.ok && res.body) {
-      return await streamSSE(res.body, onChunk);
-    }
-  } catch { /* fallback */ }
-  return callClaudeDirect(systemPrompt, userMessage, onChunk);
+  // Usa ai-chat (Edge Function Supabase) — chave fica no servidor
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4096,
+      stream: true,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+    }),
+  });
+  if (!res.ok || !res.body) {
+    const err = await res.text().catch(() => "");
+    throw new Error(`ai-chat error ${res.status}: ${err}`);
+  }
+  return streamSSE(res.body, onChunk);
 }
 
 async function callClaudeDirect(
